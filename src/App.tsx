@@ -7,8 +7,8 @@ export default function App() {
   const incrementarContador = (): void => {
     const nuevoValor = contador + 1;
     setContador(nuevoValor);
-    if (nuevoValor === 10) {
-      Alert.alert("¡Excelente!", "Has presionado tu botón TypeScript 10 veces.", [{ text: "OK" }]);
+    if (nuevoValor === 7) {
+      Alert.alert("¡Excelente!", "Has presionado tu botón TypeScript 7 veces.", [{ text: "OK" }]);
     }
   };
 
