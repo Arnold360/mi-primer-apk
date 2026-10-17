@@ -2,123 +2,218 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 
-// Definimos la estructura de un producto
 interface Producto {
   id: string;
   nombre: string;
   precio: number;
+  categoria: 'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza';
+  actualizadoEn: number;
 }
 
+type CategoriaFiltro = 'Todos' | 'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza';
+type CriterioOrden = 'nombre' | 'recientes';
+
 export default function HomeScreen() {
-  // Inicializamos el estado con tus productos base, pero ahora es una lista libre que puede crecer o achicarse
   const [productos, setProductos] = useState<Producto[]>([
-    { id: '1', nombre: 'Arroz Extra 1kg', precio: 4.50 },
-    { id: '2', nombre: 'Aceite Vegetal 1L', precio: 7.20 },
-    { id: '3', nombre: 'Gaseosa 500ml', precio: 2.50 }
+    { id: '1', nombre: 'Arroz Extra 1kg', precio: 4.50, categoria: 'Abarrotes', actualizadoEn: Date.now() },
+    { id: '2', nombre: 'Aceite Vegetal 1L', precio: 7.20, categoria: 'Abarrotes', actualizadoEn: Date.now() - 10000 },
+    { id: '3', nombre: 'Cuaderno Smart A4', precio: 5.50, categoria: 'Librería', actualizadoEn: Date.now() - 20000 },
+    { id: '4', nombre: 'Gaseosa 500ml', precio: 2.50, categoria: 'Golosinas', actualizadoEn: Date.now() - 30000 },
   ]);
 
-  // Estados para el formulario de nuevo producto
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
+  const [nuevaCategoria, setNuevaCategoria] = useState<'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza'>('Abarrotes');
 
-  // Función para agregar un producto a la lista
+  const [busqueda, setBusqueda] = useState('');
+  const [categoriaActiva, setCategoriaActiva] = useState<CategoriaFiltro>('Todos');
+  const [ordenarPor, setOrdenarPor] = useState<CriterioOrden>('nombre');
+  const [idConfirmandoBorrado, setIdConfirmandoBorrado] = useState<string | null>(null);
+
   const agregarProducto = () => {
-    if (nuevoNombre.trim() === '' || nuevoNombre.trim() === '') return;
+    // CORREGIDO: Validación correcta de ambos campos
+    if (nuevoNombre.trim() === '' || nuevoPrecio.trim() === '') return;
     const precioNum = parseFloat(nuevoPrecio);
     if (isNaN(precioNum)) return;
 
     const nuevoProd: Producto = {
-      id: Date.now().toString(), // Genera un ID único basado en el tiempo actual
-      nombre: nuevoNombre,
-      precio: precioNum
+      id: Date.now().toString(),
+      nombre: nuevoNombre.trim(),
+      precio: precioNum,
+      categoria: nuevaCategoria,
+      actualizadoEn: Date.now()
     };
 
-    setProductos([...productos, nuevoProd]);
-    
-    // Limpiamos los campos del formulario
+    setProductos([nuevoProd, ...productos]);
     setNuevoNombre('');
     setNuevoPrecio('');
   };
 
-  // Función para borrar un producto de la lista
-  const eliminarProducto = (id: string) => {
-    setProductos(productos.filter(prod => prod.id !== id));
+  const intentarEliminar = (id: string) => {
+    if (idConfirmandoBorrado === id) {
+      setProductos(productos.filter(prod => prod.id !== id));
+      setIdConfirmandoBorrado(null);
+    } else {
+      setIdConfirmandoBorrado(id);
+    }
   };
 
-  // Función para editar el precio de un producto existente directamente desde su tarjeta
   const cambiarPrecio = (id: string, nuevoPrecioTexto: string) => {
     const precioNumerico = parseFloat(nuevoPrecioTexto);
     if (isNaN(precioNumerico)) return;
 
     setProductos(productosAnteriores => 
       productosAnteriores.map(prod => 
-        prod.id === id ? { ...prod, precio: precioNumerico } : prod
+        prod.id === id 
+          ? { ...prod, precio: precioNumerico, actualizadoEn: Date.now() }
+          : prod
       )
     );
   };
 
+  const productosProcesados = productos
+    .filter(prod => {
+      const coincideBusqueda = prod.nombre.toLowerCase().includes(busqueda.toLowerCase());
+      const coincideCategoria = categoriaActiva === 'Todos' || prod.categoria === categoriaActiva;
+      return coincideBusqueda && coincideCategoria;
+    })
+    .sort((a, b) => {
+      if (ordenarPor === 'recientes') {
+        return b.actualizadoEn - a.actualizadoEn;
+      }
+      return a.nombre.localeCompare(b.nombre);
+    });
+
   return (
     <ScrollView style={styles.contenedor} keyboardShouldPersistTaps="handled">
-      <Text style={styles.tituloHeader}>🏪 Mi Bodega - Inventario</Text>
+      <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
 
-      {/* FORMULARIO PARA AÑADIR PRODUCTO */}
+      {/* FORMULARIO DE ENTRADA CORREGIDO */}
       <View style={styles.cajaFormulario}>
-        <Text style={styles.tituloFormulario}>Añadir Nuevo Producto</Text>
+        <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
         <TextInput
           style={styles.inputForm}
-          placeholder="Nombre del producto (ej: Detergente)"
+          placeholder="Nombre del producto"
           placeholderTextColor="#999"
           value={nuevoNombre}
           onChangeText={setNuevoNombre}
         />
         <View style={styles.filaForm}>
           <TextInput
-            style={[styles.inputForm, { flex: 1, marginRight: 10 }]}
-            placeholder="Precio (ej: 5.50)"
+            style={[styles.inputForm, { flex: 1, marginRight: 8, marginBottom: 0 }]}
+            placeholder="Precio"
             placeholderTextColor="#999"
             keyboardType="numeric"
             value={nuevoPrecio}
             onChangeText={setNuevoPrecio}
           />
           <TouchableOpacity style={styles.botonGuardar} onPress={agregarProducto}>
-            <Text style={styles.textoBoton}>+ Agregar</Text>
+            <Text style={styles.textoBoton}>+ Guardar</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Selector de categorías envuelto para evitar desbordes */}
+        <View style={styles.contenedorSelectCategoria}>
+          {(['Abarrotes', 'Librería', 'Golosinas', 'Limpieza'] as const).map(cat => (
+            <TouchableOpacity 
+              key={cat} 
+              style={[styles.opcionMiniCat, nuevaCategoria === cat && styles.opcionMiniCatActiva]}
+              onPress={() => setNuevaCategoria(cat)}
+            >
+              <Text style={[styles.textoMiniCat, nuevaCategoria === cat && styles.textoMiniCatActivo]}>{cat}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* CONTROLES DE BÚSQUEDA Y CATEGORÍAS */}
+      <View style={styles.seccionFiltros}>
+        <TextInput
+          style={styles.barraBusqueda}
+          placeholder="🔍 Buscar producto..."
+          placeholderTextColor="#777"
+          value={busqueda}
+          onChangeText={setBusqueda}
+        />
+
+        {/* Pestañas de categorías con Scroll horizontal */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carruselCategorias}>
+          {(['Todos', 'Abarrotes', 'Librería', 'Golosinas', 'Limpieza'] as CategoriaFiltro[]).map(cat => (
+            <TouchableOpacity 
+              key={cat} 
+              style={[styles.pestañaCat, categoriaActiva === cat && styles.pestañaCatActiva]}
+              onPress={() => setCategoriaActiva(cat)}
+            >
+              <Text style={[styles.textoPestaña, categoriaActiva === cat && styles.textoPestañaActiva]}>{cat}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Botones de Ordenamiento adaptados a pantallas angostas */}
+        <View style={styles.filaOrdenamiento}>
+          <Text style={styles.labelOrden}>Orden:</Text>
+          <TouchableOpacity 
+            style={[styles.botonOrden, ordenarPor === 'nombre' && styles.botonOrdenActivo]} 
+            onPress={() => setOrdenarPor('nombre')}
+          >
+            <Text style={[styles.textoOrden, ordenarPor === 'nombre' && styles.textoOrdenActivo]}>🔤 A-Z</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.botonOrden, ordenarPor === 'recientes' && styles.botonOrdenActivo]} 
+            onPress={() => setOrdenarPor('recientes')}
+          >
+            <Text style={[styles.textoOrden, ordenarPor === 'recientes' && styles.textoOrdenActivo]}>⏱️ Recientes</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <Text style={styles.subtituloSeccion}>Lista de Productos ({productos.length})</Text>
+      <Text style={styles.subtituloSeccion}>Productos en vista ({productosProcesados.length})</Text>
 
-      {/* LISTA DINÁMICA DE PRODUCTOS */}
-      {productos.map((item) => (
-        <View key={item.id} style={styles.tarjetaProducto}>
-          <View style={styles.infoProducto}>
-            <Text style={styles.nombreProducto}>{item.nombre}</Text>
-            <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
-          </View>
-          
-          <View style={styles.accionesProducto}>
-            {/* Input para cambiar precio velozmente */}
-            <TextInput
-              style={styles.inputCorto}
-              keyboardType="numeric"
-              placeholder="Editar"
-              placeholderTextColor="#999"
-              onChangeText={(txt) => cambiarPrecio(item.id, txt)}
-            />
-            {/* Botón para eliminar */}
-            <TouchableOpacity 
-              style={styles.botonEliminar} 
-              onPress={() => eliminarProducto(item.id)}
-            >
-              <Text style={styles.textoEliminar}>🗑️</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ))}
+      {/* RENDERIZADO DE PRODUCTOS */}
+      {productosProcesados.map((item) => {
+        const esCambiadoRecientemente = (Date.now() - item.actualizadoEn) < 15000;
+        const esBorrando = idConfirmandoBorrado === item.id;
 
-      {productos.length === 0 && (
-        <Text style={styles.textoVacio}>No hay productos en tu inventario. ¡Añade el primero arriba!</Text>
+        return (
+          <View key={item.id} style={[styles.tarjetaProducto, esCambiadoRecientemente && styles.tarjetaResaltada]}>
+            <View style={styles.infoProducto}>
+              <View style={styles.filaNombre}>
+                <Text style={styles.nombreProducto} numberOfLines={1} elipsizeMode="tail">
+                  {item.nombre}
+                </Text>
+                {esCambiadoRecientemente && <Text style={styles.badgeModificado}>¡Ok!</Text>}
+              </View>
+              <Text style={styles.tagCategoria}>{item.categoria}</Text>
+              <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
+            </View>
+            
+            <View style={styles.accionesProducto}>
+              <TextInput
+                style={styles.inputCorto}
+                keyboardType="numeric"
+                placeholder="Editar"
+                placeholderTextColor="#999"
+                onChangeText={(txt) => cambiarPrecio(item.id, txt)}
+              />
+              
+              <TouchableOpacity 
+                style={[styles.botonEliminar, esBorrando && styles.botonEliminarAlerta]} 
+                onPress={() => intentarEliminar(item.id)}
+                onBlur={() => setIdConfirmandoBorrado(null)}
+              >
+                <Text style={[styles.textoEliminar, esBorrando && styles.textoEliminarAlerta]}>
+                  {esBorrando ? '¿Borrar?' : '🗑️'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      })}
+
+      {productosProcesados.length === 0 && (
+        <Text style={styles.textoVacio}>No hay productos.</Text>
       )}
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -126,25 +221,49 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   contenedor: { paddingHorizontal: 15, backgroundColor: '#F5F7FA' },
   tituloHeader: { fontSize: 24, fontWeight: 'bold', color: '#1A1C1E', textAlign: 'center', marginVertical: 15 },
-  subtituloSeccion: { fontSize: 16, fontWeight: '700', color: '#64748B', marginBottom: 10, marginTop: 5 },
+  subtituloSeccion: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 10, marginTop: 5 },
   
-  // Estilos del Formulario
-  cajaFormulario: { backgroundColor: '#FFFFFF', padding: 15, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', elevation: 1 },
-  tituloFormulario: { fontSize: 14, fontWeight: '700', color: '#475569', marginBottom: 10 },
-  inputForm: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#F8FAFC', color: '#333', marginBottom: 10, fontSize: 15 },
+  cajaFormulario: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
+  tituloFormulario: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8 },
+  inputForm: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', marginBottom: 8, fontSize: 14 },
   filaForm: { flexDirection: 'row', alignItems: 'center' },
-  botonGuardar: { backgroundColor: '#0284C7', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, justifyContent: 'center' },
-  textoBoton: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 },
+  botonGuardar: { backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+  textoBoton: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
   
-  // Estilos de las Tarjetas
-  tarjetaProducto: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 15, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-  infoProducto: { flex: 1, paddingRight: 10 },
-  nombreProducto: { fontSize: 16, fontWeight: '600', color: '#1A1C1E' },
-  textoPrecio: { fontSize: 16, fontWeight: 'bold', color: '#059669', marginTop: 4 },
-  
-  accionesProducto: { flexDirection: 'row', alignItems: 'center' },
-  inputCorto: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#F8FAFC', width: 70, fontSize: 13, color: '#333', textAlign: 'center', marginRight: 10 },
-  botonEliminar: { padding: 8, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FEE2E2' },
-  textoEliminar: { fontSize: 16 },
-  textoVacio: { textAlign: 'center', color: '#64748B', marginTop: 20, fontSize: 15 }
+  // Ajustado con flexRow y wrap para que nunca salga de los bordes
+  contenedorSelectCategoria: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
+
+  opcionMiniCat: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' },
+opcionMiniCatActiva: { backgroundColor: '#0284C7', borderColor: '#0284C7' },
+textoMiniCat: { fontSize: 12, color: '#475569' },
+textoMiniCatActivo: { color: '#FFFFFF', fontWeight: '600' },
+seccionFiltros: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
+barraBusqueda: { backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', color: '#333', marginBottom: 10 },
+carruselCategorias: { flexDirection: 'row', marginBottom: 10 },
+pestañaCat: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15, backgroundColor: '#F1F5F9', marginRight: 8 },
+pestañaCatActiva: { backgroundColor: '#1E293B' },
+textoPestaña: { fontSize: 13, color: '#475569' },
+textoPestañaActiva: { color: '#FFFFFF', fontWeight: '700' },
+filaOrdenamiento: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 6 },
+labelOrden: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+botonOrden: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },
+botonOrdenActivo: { backgroundColor: '#E0F2FE', borderColor: '#bae6fd' },
+textoOrden: { fontSize: 12, color: '#64748B' },
+textoOrdenActivo: { color: '#0369a1', fontWeight: '600' },
+tarjetaProducto: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+tarjetaResaltada: { borderColor: '#34D399', backgroundColor: '#F0FDF4', borderWidth: 1.5 },
+infoProducto: { flex: 1, paddingRight: 8 },
+filaNombre: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+nombreProducto: { fontSize: 15, fontWeight: '600', color: '#1A1C1E', maxWidth: '80%' },
+badgeModificado: { fontSize: 10, color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden', fontWeight: '700' },
+tagCategoria: { fontSize: 11, color: '#64748B', marginTop: 2 },
+textoPrecio: { fontSize: 15, fontWeight: 'bold', color: '#059669', marginTop: 3 },
+accionesProducto: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+inputCorto: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, backgroundColor: '#F8FAFC', width: 60, fontSize: 12, color: '#333', textAlign: 'center' },
+botonEliminar: { paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FEE2E2', minWidth: 35, alignItems: 'center' },
+botonEliminarAlerta: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
+textoEliminar: { fontSize: 14 },
+textoEliminarAlerta: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+textoVacio: { textAlign: 'center', color: '#64748B', marginTop: 15, fontSize: 14 }
 });
+
