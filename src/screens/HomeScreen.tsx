@@ -19,12 +19,9 @@ interface ItemCarrito {
 export default function HomeScreen() {
   const [productos, setProductos] = useState<Producto[]>(inventarioInicial);
   const [busqueda, setBusqueda] = useState('');
-  
-  // Estados para la venta y el carrito rápido
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [pagoCon, setPagoCon] = useState('');
 
-  // Cambiar precio ágilmente desde el input del catálogo
   const cambiarPrecio = (id: string, nuevoPrecioTexto: string) => {
     const precioNumerico = parseFloat(nuevoPrecioTexto);
     if (isNaN(precioNumerico)) return;
@@ -35,7 +32,6 @@ export default function HomeScreen() {
       )
     );
 
-    // Actualizar también el precio si el producto ya estaba en el carrito
     setCarrito(carritoAnterior =>
       carritoAnterior.map(item =>
         item.producto.id === id 
@@ -45,7 +41,6 @@ export default function HomeScreen() {
     );
   };
 
-  // Agregar producto al carrito al tocar la tarjeta
   const agregarAlCarrito = (producto: Producto) => {
     setCarrito(carritoAnterior => {
       const existe = carritoAnterior.find(item => item.producto.id === producto.id);
@@ -60,7 +55,6 @@ export default function HomeScreen() {
     });
   };
 
-  // Restar o eliminar un producto del carrito
   const quitarDelCarrito = (id: string) => {
     setCarrito(carritoAnterior => {
       return carritoAnterior
@@ -69,18 +63,15 @@ export default function HomeScreen() {
     });
   };
 
-  // Limpiar toda la venta actual
   const limpiarCarrito = () => {
     setCarrito([]);
     setPagoCon('');
   };
 
-  // Cálculos matemáticos de la venta
   const totalVenta = carrito.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0);
   const efectivo = parseFloat(pagoCon) || 0;
   const vuelto = efectivo > totalVenta ? efectivo - totalVenta : 0;
 
-  // Filtrado de productos por texto
   const productosFiltrados = productos.filter(prod => {
     const termino = busqueda.toLowerCase();
     return (
@@ -100,7 +91,7 @@ export default function HomeScreen() {
         <Text style={styles.categoriaEtiqueta}>{item.categoria}</Text>
         <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
       </View>
-      <View style={styles.contenedorInput} onStartShouldSetResponder={() => true}>
+      <View style={styles.contenedorInput}>
         <Text style={styles.simboloMoneda}>S/.</Text>
         <TextInput
           style={styles.inputCorto}
@@ -135,7 +126,6 @@ export default function HomeScreen() {
         }
       />
 
-      {/* PANEL DE CARRITO Y VUELTO RÁPIDO */}
       {carrito.length > 0 && (
         <View style={styles.panelVenta}>
           <View style={styles.filaHeaderVenta}>
@@ -145,7 +135,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Mini lista horizontal de items en la cuenta */}
+          {/* CORREGIDO: Renderizado seguro de texto plano */}
           <View style={styles.contenedorFichas}>
             {carrito.map(item => (
               <TouchableOpacity 
@@ -154,13 +144,12 @@ export default function HomeScreen() {
                 onPress={() => quitarDelCarrito(item.producto.id)}
               >
                 <Text style={styles.textoFicha}>
-                  {item.cantidad}x {item.producto.nombre.split(' ')[0]} ✕
+                  {item.cantidad}x {item.producto.nombre} ✕
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Fila de cálculos de precios y caja de cobro */}
           <View style={styles.cajaTotales}>
             <View>
               <Text style={styles.labelTotal}>TOTAL A COBRAR</Text>
@@ -194,7 +183,7 @@ const styles = StyleSheet.create({
   contenedorBase: { flex: 1, backgroundColor: '#F5F7FA' },
   tituloHeader: { fontSize: 24, fontWeight: 'bold', color: '#1A1C1E', textAlign: 'center', marginVertical: 15 },
   barraBusqueda: { backgroundColor: '#FFFFFF', paddingHorizontal: 15, paddingVertical: 12, borderRadius: 10, marginHorizontal: 15, marginBottom: 15, fontSize: 16, borderWidth: 1, borderColor: '#E2E8F0', color: '#333' },
-  listaContenido: { paddingHorizontal: 15, paddingBottom: 160 }, // Espacio abajo para que el panel no tape productos
+  listaContenido: { paddingHorizontal: 15, paddingBottom: 180 }, 
   tarjetaProducto: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 15, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   infoProducto: { flex: 1, paddingRight: 10 },
   nombreProducto: { fontSize: 16, fontWeight: '600', color: '#1A1C1E' },
@@ -205,12 +194,11 @@ const styles = StyleSheet.create({
   inputCorto: { flex: 1, paddingVertical: 6, fontSize: 15, color: '#333', textAlign: 'right' },
   textoVacio: { textAlign: 'center', color: '#64748B', marginTop: 30, fontSize: 16 },
   
-  // Estilos del panel inferior
   panelVenta: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#1E293B', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 15, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 10 },
   filaHeaderVenta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   tituloVenta: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
   botonLimpiar: { color: '#F87171', fontWeight: '600', fontSize: 14 },
-  contenedorFichas: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, maxHeight: 40, overflow: 'hidden' },
+  contenedorFichas: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, maxHeight: 60, overflow: 'hidden' },
   fichaItem: { backgroundColor: '#334155', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, marginRight: 6, marginBottom: 6 },
   textoFicha: { color: '#E2E8F0', fontSize: 12, fontWeight: '500' },
   cajaTotales: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderColor: '#334155' },
