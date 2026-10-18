@@ -1,3 +1,4 @@
+
 // src/screens/HomeScreen.tsx (PARTE 1)
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable } from 'react-native';
@@ -114,8 +115,13 @@ export default function HomeScreen() {
 // src/screens/HomeScreen.tsx (PARTE 2 - Continuación)
   return (
     <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
-      <ScrollView style={styles.contenedor} keyboardShouldPersistTaps="handled">
-        <Text style={styles.tituloHeader}>🏪 BODEGA ELVIS</Text>
+      <ScrollView 
+          style={styles.contenedor} 
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true} // Permite que los gestos no se queden atrapados en los componentes hijos
+          overScrollMode="never"> // Evita rebotes extraños en Android que congelan el toque
+        
+        <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
 
         {/* FORMULARIO */}
         <View style={styles.cajaFormulario}>
