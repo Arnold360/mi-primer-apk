@@ -114,10 +114,10 @@ export default function HomeScreen() {
     });
 // src/screens/HomeScreen.tsx (PARTE 2 - Continuación)
   return (
-    <SafeAreaView style={styles.contenedorBase}>
       <ScrollView 
           style={styles.contenedor} 
           keyboardShouldPersistTaps="handled">
+        <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
           
          <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
 
@@ -220,8 +220,8 @@ export default function HomeScreen() {
         })}
         {productosProcesados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
         <View style={{ height: 40 }} />
+        </Pressable>
       </ScrollView>
-    </SafeAreaView>
   );
 }
 
