@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Mi Primer APK",
+    "name": "Mi bodega",
     "slug": "mi-primer-apk",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,9 +14,11 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.miappts.miprimerapk"
+      "package": "com.miappts.mibodega",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
