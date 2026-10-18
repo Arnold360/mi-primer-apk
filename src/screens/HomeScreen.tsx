@@ -115,7 +115,7 @@ export default function HomeScreen() {
   return (
     <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
       <ScrollView style={styles.contenedor} keyboardShouldPersistTaps="handled">
-        <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
+        <Text style={styles.tituloHeader}>🏪 BODEGA ELVIS</Text>
 
         {/* FORMULARIO */}
         <View style={styles.cajaFormulario}>
