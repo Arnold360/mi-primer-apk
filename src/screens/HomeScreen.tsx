@@ -114,14 +114,12 @@ export default function HomeScreen() {
     });
 // src/screens/HomeScreen.tsx (PARTE 2 - Continuación)
   return (
-    <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
+    <SafeAreaView style={styles.contenedorBase}>
       <ScrollView 
           style={styles.contenedor} 
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled={true} // Permite que los gestos no se queden atrapados en los componentes hijos
-          overScrollMode="never"> // Evita rebotes extraños en Android que congelan el toque
-        
-        <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
+          keyboardShouldPersistTaps="handled">
+          
+         <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
 
         {/* FORMULARIO */}
         <View style={styles.cajaFormulario}>
@@ -223,7 +221,7 @@ export default function HomeScreen() {
         {productosProcesados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
         <View style={{ height: 40 }} />
       </ScrollView>
-    </Pressable>
+    </SafeAreaView>
   );
 }
 
