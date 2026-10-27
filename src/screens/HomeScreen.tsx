@@ -1,34 +1,42 @@
 // src/screens/HomeScreen.tsx (PARTE 1)
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 
 interface Producto {
   id: string;
   nombre: string;
   precio: number;
-  categoria: 'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza';
+  categoria: string;
   actualizadoEn: number;
 }
 
-type CategoriaFiltro = 'Todos' | 'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza';
 type CriterioOrden = 'nombre' | 'recientes';
 
 const RUTA_ARCHIVO_INVENTARIO = FileSystem.documentDirectory + 'inventario_bodega.json';
 const RUTA_ARCHIVO_NOMBRE_BODEGA = FileSystem.documentDirectory + 'nombre_bodega.txt';
+const RUTA_ARCHIVO_CATEGORIAS = FileSystem.documentDirectory + 'categorias_bodega.json';
+
+const CATEGORIAS_DEFAULT = ['Abarrotes', 'Librería', 'Golosinas', 'Limpieza'];
 
 export default function HomeScreen() {
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT);
+  
   const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [inputNombreTemp, setInputNombreTemp] = useState('');
 
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
-  const [nuevaCategoria, setNuevaCategoria] = useState<'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza'>('Abarrotes');
+  const [nuevaCategoria, setNuevaCategoria] = useState<string>('Abarrotes');
+
+  const [modalCatVisible, setModalCatVisible] = useState(false);
+  const [nuevaCatInput, setNuevaCatInput] = useState('');
+  const [idConfirmandoBorradoCat, setIdConfirmandoBorradoCat] = useState<string | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
-  const [categoriaActiva, setCategoriaActiva] = useState<CategoriaFiltro>('Todos');
+  const [categoriaActiva, setCategoriaActiva] = useState<string>('Todos');
   const [ordenarPor, setOrdenarPor] = useState<CriterioOrden>('nombre');
   const [idConfirmandoBorrado, setIdConfirmandoBorrado] = useState<string | null>(null);
 
@@ -36,7 +44,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const cargarInventarioLocal = async () => {
       try {
-        // 1. Cargar Nombre de la Bodega Guardado
+        // 1. Cargar Nombre de la Bodega
         const infoNombre = await FileSystem.getInfoAsync(RUTA_ARCHIVO_NOMBRE_BODEGA);
         if (infoNombre.exists) {
           const nombreGuardado = await FileSystem.readAsStringAsync(RUTA_ARCHIVO_NOMBRE_BODEGA);
@@ -48,7 +56,19 @@ export default function HomeScreen() {
           setInputNombreTemp('Mi Bodega Pro');
         }
 
-        // 2. Cargar Inventario
+        // 2. Cargar Categorías Personalizadas
+        const infoCat = await FileSystem.getInfoAsync(RUTA_ARCHIVO_CATEGORIAS);
+        if (infoCat.exists) {
+          const catGuardadas = JSON.parse(await FileSystem.readAsStringAsync(RUTA_ARCHIVO_CATEGORIAS));
+          if (Array.isArray(catGuardadas) && catGuardadas.length > 0) {
+            setCategorias(catGuardadas);
+            setNuevaCategoria(catGuardadas[0]);
+          }
+        } else {
+          await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_CATEGORIAS, JSON.stringify(CATEGORIAS_DEFAULT));
+        }
+
+        // 3. Cargar Inventario
         const infoArchivo = await FileSystem.getInfoAsync(RUTA_ARCHIVO_INVENTARIO);
         if (infoArchivo.exists) {
           const contenidoRaw = await FileSystem.readAsStringAsync(RUTA_ARCHIVO_INVENTARIO);
@@ -77,6 +97,14 @@ export default function HomeScreen() {
     }
   };
 
+  const guardarCategoriasEnDisco = async (nuevasCat: string[]) => {
+    try {
+      await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_CATEGORIAS, JSON.stringify(nuevasCat));
+    } catch (e) {
+      console.log("Error al salvar categorías:", e);
+    }
+  };
+
   const guardarNombreBodega = async () => {
     if (inputNombreTemp.trim() === '') return;
     try {
@@ -85,6 +113,44 @@ export default function HomeScreen() {
       setEditandoNombre(false);
     } catch (e) {
       console.log("Error al guardar nombre:", e);
+    }
+  };
+
+  const agregarCategoria = (nombreSugerido?: string) => {
+    const catFinal = (nombreSugerido || nuevaCatInput).trim();
+    if (catFinal === '') return;
+    
+    // Evitar duplicados ignorando mayúsculas/minúsculas
+    if (categorias.some(c => c.toLowerCase() === catFinal.toLowerCase())) {
+      Alert.alert("Aviso", "Esta categoría ya existe.");
+      return;
+    }
+
+    const nuevasCat = [...categorias, catFinal];
+    setCategorias(nuevasCat);
+    guardarCategoriasEnDisco(nuevasCat);
+    setNuevaCatInput('');
+  };
+
+  const intentarEliminarCategoria = (catAEliminar: string) => {
+    if (categorias.length <= 1) {
+      Alert.alert("No permitido", "Debes tener al menos una categoría.");
+      return;
+    }
+
+    if (idConfirmandoBorradoCat === catAEliminar) {
+      // Filtrar categorías
+      const nuevasCat = categorias.filter(c => c !== catAEliminar);
+      setCategorias(nuevasCat);
+      guardarCategoriasEnDisco(nuevasCat);
+
+      // Si la categoría activa o la seleccionada para nuevos productos era esta, cambiarla
+      if (categoriaActiva === catAEliminar) setCategoriaActiva('Todos');
+      if (nuevaCategoria === catAEliminar) setNuevaCategoria(nuevasCat[0]);
+
+      setIdConfirmandoBorradoCat(null);
+    } else {
+      setIdConfirmandoBorradoCat(catAEliminar);
     }
   };
 
@@ -146,17 +212,15 @@ export default function HomeScreen() {
       <ScrollView 
           style={styles.contenedor} 
           keyboardShouldPersistTaps="handled">
-        <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
+        <Pressable style={{ flex: 1 }} onPress={() => { setIdConfirmandoBorrado(null); setIdConfirmandoBorradoCat(null); }}>
           
-        {/* ENCABEZADO DE BODEGA DINÁMICO */}
+        {/* ENCABEZADO DE BODEGA DINÁMICO (MANTENER PRESIONADO PARA EDITAR) */}
         <View style={styles.cajaHeader}>
           {!editandoNombre ? (
-            <View style={styles.filaTituloHeader}>
+            <Pressable onLongPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }}>
               <Text style={styles.tituloHeader} numberOfLines={1}>🏪 {nombreBodega}</Text>
-              <TouchableOpacity style={styles.botonEditarNombre} onPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }}>
-                <Text style={styles.textoBotonEditarNombre}>✏️ Cambiar</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.subHintHeader}>(Mantén presionado para cambiar nombre)</Text>
+            </Pressable>
           ) : (
             <View style={styles.cajaEditarNombre}>
               <TextInput
@@ -165,6 +229,7 @@ export default function HomeScreen() {
                 onChangeText={setInputNombreTemp}
                 placeholder="Nombre de tu bodega"
                 placeholderTextColor="#999"
+                autoFocus
               />
               <View style={styles.filaAccionsNombre}>
                 <TouchableOpacity style={styles.botonGuardarNombre} onPress={guardarNombreBodega}>
@@ -180,9 +245,63 @@ export default function HomeScreen() {
 
         {/* FORMULARIO */}
         <View style={styles.cajaFormulario}>
-          <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
+          <View style={styles.filaTituloConBoton}>
+            <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
+            <TouchableOpacity style={styles.botonAbrirCategorias} onPress={() => setModalCatVisible(!modalCatVisible)}>
+              <Text style={styles.textoBotonAbrirCat}>⚙️ Gestionar Categorías</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* PANEL DE GESTIÓN DE CATEGORÍAS (COLAPSIBLE) */}
+          {modalCatVisible && (
+            <View style={styles.panelGestionCat}>
+              <Text style={styles.labelPanelCat}>Añadir nueva categoría:</Text>
+              <View style={styles.filaForm}>
+                <TextInput
+                  style={[styles.inputForm, { flex: 1, marginRight: 8, marginBottom: 0 }]}
+                  placeholder="Ej. Bebidas, Lácteos..."
+                  placeholderTextColor="#999"
+                  value={nuevaCatInput}
+                  onChangeText={setNuevaCatInput}
+                />
+                <TouchableOpacity style={styles.botonGuardarCat} onPress={() => agregarCategoria()}>
+                  <Text style={styles.textoBoton}>+ Agregar</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Sugerencias rápidas:</Text>
+              <View style={styles.sugerenciasContainer}>
+                {['Bebidas', 'Lácteos', 'Frutas y Verduras', 'Higiene', 'Mascotas', 'Snacks'].map(sug => (
+                  !categorias.includes(sug) && (
+                    <TouchableOpacity key={sug} style={styles.chipSugerencia} onPress={() => agregarCategoria(sug)}>
+                      <Text style={styles.textoChipSugerencia}>+ {sug}</Text>
+                    </TouchableOpacity>
+                  )
+                ))}
+              </View>
+
+              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categorías actuales (Mantén para borrar):</Text>
+              <View style={styles.listaBorrarCat}>
+                {categorias.map(cat => {
+                  const esBorrandoCat = idConfirmandoBorradoCat === cat;
+                  return (
+                    <TouchableOpacity 
+                      key={cat} 
+                      style={[styles.badgeBorrarCat, esBorrandoCat && styles.badgeBorrarCatAlerta]} 
+                      onPress={() => intentarEliminarCategoria(cat)}
+                    >
+                      <Text style={[styles.textoBadgeBorrar, esBorrandoCat && styles.textoBadgeBorrarAlerta]}>
+                        {cat} {esBorrandoCat ? '❓(¿Borrar?)' : '✕'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <TextInput
-            style={styles.inputForm}
+            style={[styles.inputForm, { marginTop: 8 }]}
             placeholder="Nombre del producto"
             placeholderTextColor="#999"
             value={nuevoNombre}
@@ -202,7 +321,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.contenedorSelectCategoria}>
-            {(['Abarrotes', 'Librería', 'Golosinas', 'Limpieza'] as const).map(cat => (
+            {categorias.map(cat => (
               <TouchableOpacity 
                 key={cat} 
                 style={[styles.opcionMiniCat, nuevaCategoria === cat && styles.opcionMiniCatActiva]}
@@ -224,7 +343,13 @@ export default function HomeScreen() {
             onChangeText={setBusqueda}
           />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carruselCategorias}>
-            {(['Todos', 'Abarrotes', 'Librería', 'Golosinas', 'Limpieza'] as CategoriaFiltro[]).map(cat => (
+            <TouchableOpacity 
+              style={[styles.pestañaCat, categoriaActiva === 'Todos' && styles.pestañaCatActiva]}
+              onPress={() => setCategoriaActiva('Todos')}
+            >
+              <Text style={[styles.textoPestaña, categoriaActiva === 'Todos' && styles.textoPestañaActiva]}>Todos</Text>
+            </TouchableOpacity>
+            {categorias.map(cat => (
               <TouchableOpacity 
                 key={cat} 
                 style={[styles.pestañaCat, categoriaActiva === cat && styles.pestañaCatActiva]}
@@ -284,12 +409,10 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   contenedor: { paddingHorizontal: 15, backgroundColor: '#F5F7FA' },
-  cajaHeader: { marginVertical: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
-  filaTituloHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tituloHeader: { fontSize: 20, fontWeight: 'bold', color: '#1A1C1E', flex: 1, marginRight: 10 },
-  botonEditarNombre: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
-  textoBotonEditarNombre: { fontSize: 12, color: '#475569', fontWeight: '600' },
-  cajaEditarNombre: { gap: 8 },
+  cajaHeader: { marginVertical: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
+  tituloHeader: { fontSize: 20, fontWeight: 'bold', color: '#1A1C1E', textAlign: 'center' },
+  subHintHeader: { fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 2 },
+  cajaEditarNombre: { width: '100%', gap: 8 },
   inputNombreHeader: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', fontSize: 15 },
   filaAccionsNombre: { flexDirection: 'row', gap: 8 },
   botonGuardarNombre: { backgroundColor: '#0284C7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, flex: 1, alignItems: 'center' },
@@ -299,9 +422,25 @@ const styles = StyleSheet.create({
 
   subtituloSeccion: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 10, marginTop: 5 },
   cajaFormulario: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
-  tituloFormulario: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8 },
-  inputForm: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', marginBottom: 8, fontSize: 14 },
-  filaForm: { flexDirection: 'row', alignItems: 'center' },
+  filaTituloConBoton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  tituloFormulario: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  botonAbrirCategorias: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
+  textoBotonAbrirCat: { fontSize: 11, color: '#475569', fontWeight: '600' },
+  
+  panelGestionCat: { backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', marginVertical: 8 },
+  labelPanelCat: { fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 },
+  sugerenciasContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  chipSugerencia: { backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD' },
+  textoChipSugerencia: { fontSize: 11, color: '#0369A1', fontWeight: '600' },
+  listaBorrarCat: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  badgeBorrarCat: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
+  badgeBorrarCatAlerta: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+  textoBadgeBorrar: { fontSize: 11, color: '#334155', fontWeight: '600' },
+  textoBadgeBorrarAlerta: { color: '#DC2626' },
+  botonGuardarCat: { backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+
+  inputForm: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', fontSize: 14 },
+  filaForm: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   botonGuardar: { backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
   textoBoton: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
   contenedorSelectCategoria: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
