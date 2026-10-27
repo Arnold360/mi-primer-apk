@@ -1,4 +1,3 @@
-
 // src/screens/HomeScreen.tsx (PARTE 1)
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable } from 'react-native';
@@ -16,9 +15,14 @@ type CategoriaFiltro = 'Todos' | 'Abarrotes' | 'Librería' | 'Golosinas' | 'Limp
 type CriterioOrden = 'nombre' | 'recientes';
 
 const RUTA_ARCHIVO_INVENTARIO = FileSystem.documentDirectory + 'inventario_bodega.json';
+const RUTA_ARCHIVO_NOMBRE_BODEGA = FileSystem.documentDirectory + 'nombre_bodega.txt';
 
 export default function HomeScreen() {
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [inputNombreTemp, setInputNombreTemp] = useState('');
+
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
   const [nuevaCategoria, setNuevaCategoria] = useState<'Abarrotes' | 'Librería' | 'Golosinas' | 'Limpieza'>('Abarrotes');
@@ -32,6 +36,19 @@ export default function HomeScreen() {
   useEffect(() => {
     const cargarInventarioLocal = async () => {
       try {
+        // 1. Cargar Nombre de la Bodega Guardado
+        const infoNombre = await FileSystem.getInfoAsync(RUTA_ARCHIVO_NOMBRE_BODEGA);
+        if (infoNombre.exists) {
+          const nombreGuardado = await FileSystem.readAsStringAsync(RUTA_ARCHIVO_NOMBRE_BODEGA);
+          if (nombreGuardado.trim() !== '') {
+            setNombreBodega(nombreGuardado);
+            setInputNombreTemp(nombreGuardado);
+          }
+        } else {
+          setInputNombreTemp('Mi Bodega Pro');
+        }
+
+        // 2. Cargar Inventario
         const infoArchivo = await FileSystem.getInfoAsync(RUTA_ARCHIVO_INVENTARIO);
         if (infoArchivo.exists) {
           const contenidoRaw = await FileSystem.readAsStringAsync(RUTA_ARCHIVO_INVENTARIO);
@@ -57,6 +74,17 @@ export default function HomeScreen() {
       await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_INVENTARIO, JSON.stringify(nuevaLista));
     } catch (e) {
       console.log("Error al salvar local:", e);
+    }
+  };
+
+  const guardarNombreBodega = async () => {
+    if (inputNombreTemp.trim() === '') return;
+    try {
+      await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_NOMBRE_BODEGA, inputNombreTemp.trim());
+      setNombreBodega(inputNombreTemp.trim());
+      setEditandoNombre(false);
+    } catch (e) {
+      console.log("Error al guardar nombre:", e);
     }
   };
 
@@ -112,6 +140,7 @@ export default function HomeScreen() {
       if (ordenarPor === 'recientes') return b.actualizadoEn - a.actualizadoEn;
       return a.nombre.localeCompare(b.nombre);
     });
+
 // src/screens/HomeScreen.tsx (PARTE 2 - Continuación)
   return (
       <ScrollView 
@@ -119,7 +148,35 @@ export default function HomeScreen() {
           keyboardShouldPersistTaps="handled">
         <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
           
-         <Text style={styles.tituloHeader}>🏪 Mi Bodega Pro</Text>
+        {/* ENCABEZADO DE BODEGA DINÁMICO */}
+        <View style={styles.cajaHeader}>
+          {!editandoNombre ? (
+            <View style={styles.filaTituloHeader}>
+              <Text style={styles.tituloHeader} numberOfLines={1}>🏪 {nombreBodega}</Text>
+              <TouchableOpacity style={styles.botonEditarNombre} onPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }}>
+                <Text style={styles.textoBotonEditarNombre}>✏️ Cambiar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.cajaEditarNombre}>
+              <TextInput
+                style={styles.inputNombreHeader}
+                value={inputNombreTemp}
+                onChangeText={setInputNombreTemp}
+                placeholder="Nombre de tu bodega"
+                placeholderTextColor="#999"
+              />
+              <View style={styles.filaAccionsNombre}>
+                <TouchableOpacity style={styles.botonGuardarNombre} onPress={guardarNombreBodega}>
+                  <Text style={styles.textoAccionNombre}>Guardar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.botonCancelarNombre} onPress={() => setEditandoNombre(false)}>
+                  <Text style={styles.textoAccionCancelar}>Cancelar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* FORMULARIO */}
         <View style={styles.cajaFormulario}>
@@ -227,7 +284,19 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   contenedor: { paddingHorizontal: 15, backgroundColor: '#F5F7FA' },
-  tituloHeader: { fontSize: 24, fontWeight: 'bold', color: '#1A1C1E', textAlign: 'center', marginVertical: 15 },
+  cajaHeader: { marginVertical: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  filaTituloHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tituloHeader: { fontSize: 20, fontWeight: 'bold', color: '#1A1C1E', flex: 1, marginRight: 10 },
+  botonEditarNombre: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
+  textoBotonEditarNombre: { fontSize: 12, color: '#475569', fontWeight: '600' },
+  cajaEditarNombre: { gap: 8 },
+  inputNombreHeader: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', fontSize: 15 },
+  filaAccionsNombre: { flexDirection: 'row', gap: 8 },
+  botonGuardarNombre: { backgroundColor: '#0284C7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, flex: 1, alignItems: 'center' },
+  textoAccionNombre: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+  botonCancelarNombre: { backgroundColor: '#F1F5F9', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' },
+  textoAccionCancelar: { color: '#475569', fontSize: 13, fontWeight: '600' },
+
   subtituloSeccion: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 10, marginTop: 5 },
   cajaFormulario: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
   tituloFormulario: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8 },
