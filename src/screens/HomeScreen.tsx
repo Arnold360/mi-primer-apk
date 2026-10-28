@@ -120,7 +120,6 @@ export default function HomeScreen() {
     const catFinal = (nombreSugerido || nuevaCatInput).trim();
     if (catFinal === '') return;
     
-    // Evitar duplicados ignorando mayúsculas/minúsculas
     if (categorias.some(c => c.toLowerCase() === catFinal.toLowerCase())) {
       Alert.alert("Aviso", "Esta categoría ya existe.");
       return;
@@ -132,26 +131,23 @@ export default function HomeScreen() {
     setNuevaCatInput('');
   };
 
-  const intentarEliminarCategoria = (catAEliminar: string) => {
+  const iniciarEliminarCategoria = (cat: string) => {
     if (categorias.length <= 1) {
       Alert.alert("No permitido", "Debes tener al menos una categoría.");
       return;
     }
+    setIdConfirmandoBorradoCat(cat);
+  };
 
-    if (idConfirmandoBorradoCat === catAEliminar) {
-      // Filtrar categorías
-      const nuevasCat = categorias.filter(c => c !== catAEliminar);
-      setCategorias(nuevasCat);
-      guardarCategoriasEnDisco(nuevasCat);
+  const confirmarEliminarCategoria = (catAEliminar: string) => {
+    const nuevasCat = categorias.filter(c => c !== catAEliminar);
+    setCategorias(nuevasCat);
+    guardarCategoriasEnDisco(nuevasCat);
 
-      // Si la categoría activa o la seleccionada para nuevos productos era esta, cambiarla
-      if (categoriaActiva === catAEliminar) setCategoriaActiva('Todos');
-      if (nuevaCategoria === catAEliminar) setNuevaCategoria(nuevasCat[0]);
+    if (categoriaActiva === catAEliminar) setCategoriaActiva('Todos');
+    if (nuevaCategoria === catAEliminar) setNuevaCategoria(nuevasCat[0]);
 
-      setIdConfirmandoBorradoCat(null);
-    } else {
-      setIdConfirmandoBorradoCat(catAEliminar);
-    }
+    setIdConfirmandoBorradoCat(null);
   };
 
   const agregarProducto = () => {
@@ -217,9 +213,8 @@ export default function HomeScreen() {
         {/* ENCABEZADO DE BODEGA DINÁMICO (MANTENER PRESIONADO PARA EDITAR) */}
         <View style={styles.cajaHeader}>
           {!editandoNombre ? (
-            <Pressable onLongPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }}>
+            <Pressable onLongPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }} style={{ width: '100%', alignItems: 'center' }}>
               <Text style={styles.tituloHeader} numberOfLines={1}>🏪 {nombreBodega}</Text>
-              <Text style={styles.subHintHeader}>(Mantén presionado para cambiar nombre)</Text>
             </Pressable>
           ) : (
             <View style={styles.cajaEditarNombre}>
@@ -248,7 +243,7 @@ export default function HomeScreen() {
           <View style={styles.filaTituloConBoton}>
             <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
             <TouchableOpacity style={styles.botonAbrirCategorias} onPress={() => setModalCatVisible(!modalCatVisible)}>
-              <Text style={styles.textoBotonAbrirCat}>⚙️ Gestionar Categorías</Text>
+              <Text style={styles.textoBotonAbrirCat}>⚙️</Text>
             </TouchableOpacity>
           </View>
 
@@ -280,20 +275,23 @@ export default function HomeScreen() {
                 ))}
               </View>
 
-              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categorías actuales (Mantén para borrar):</Text>
+              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categorías actuales (Mantén presionado para borrar):</Text>
               <View style={styles.listaBorrarCat}>
                 {categorias.map(cat => {
                   const esBorrandoCat = idConfirmandoBorradoCat === cat;
                   return (
-                    <TouchableOpacity 
+                    <Pressable 
                       key={cat} 
                       style={[styles.badgeBorrarCat, esBorrandoCat && styles.badgeBorrarCatAlerta]} 
-                      onPress={() => intentarEliminarCategoria(cat)}
+                      onLongPress={() => iniciarEliminarCategoria(cat)}
+                      onPress={() => {
+                        if (esBorrandoCat) confirmarEliminarCategoria(cat);
+                      }}
                     >
                       <Text style={[styles.textoBadgeBorrar, esBorrandoCat && styles.textoBadgeBorrarAlerta]}>
-                        {cat} {esBorrandoCat ? '❓(¿Borrar?)' : '✕'}
+                        {cat} {esBorrandoCat ? '❓(¿Pulsa para borrar?)' : ''}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -411,7 +409,6 @@ const styles = StyleSheet.create({
   contenedor: { paddingHorizontal: 15, backgroundColor: '#F5F7FA' },
   cajaHeader: { marginVertical: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
   tituloHeader: { fontSize: 20, fontWeight: 'bold', color: '#1A1C1E', textAlign: 'center' },
-  subHintHeader: { fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 2 },
   cajaEditarNombre: { width: '100%', gap: 8 },
   inputNombreHeader: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', fontSize: 15 },
   filaAccionsNombre: { flexDirection: 'row', gap: 8 },
@@ -424,8 +421,8 @@ const styles = StyleSheet.create({
   cajaFormulario: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
   filaTituloConBoton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   tituloFormulario: { fontSize: 13, fontWeight: '700', color: '#475569' },
-  botonAbrirCategorias: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
-  textoBotonAbrirCat: { fontSize: 11, color: '#475569', fontWeight: '600' },
+  botonAbrirCategorias: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
+  textoBotonAbrirCat: { fontSize: 13, color: '#475569' },
   
   panelGestionCat: { backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', marginVertical: 8 },
   labelPanelCat: { fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 },
@@ -433,7 +430,7 @@ const styles = StyleSheet.create({
   chipSugerencia: { backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD' },
   textoChipSugerencia: { fontSize: 11, color: '#0369A1', fontWeight: '600' },
   listaBorrarCat: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  badgeBorrarCat: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
+  badgeBorrarCat: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
   badgeBorrarCatAlerta: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
   textoBadgeBorrar: { fontSize: 11, color: '#334155', fontWeight: '600' },
   textoBadgeBorrarAlerta: { color: '#DC2626' },
