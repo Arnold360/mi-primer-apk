@@ -2,6 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import { db } from './firebaseConfig'; // (O ajusta la ruta si tu firebaseConfig está en otra carpeta)
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+} from 'firebase/firestore';
+
 
 interface Producto {
   id: string;
@@ -15,185 +25,145 @@ type CriterioOrden = 'nombre' | 'recientes';
 
 const RUTA_ARCHIVO_INVENTARIO = FileSystem.documentDirectory + 'inventario_bodega.json';
 const RUTA_ARCHIVO_NOMBRE_BODEGA = FileSystem.documentDirectory + 'nombre_bodega.txt';
-const RUTA_ARCHIVO_CATEGORIAS = FileSystem.documentDirectory + 'categorias_bodega.json';
+  // Extrae las categorías únicas de los productos de Firebase para el carrusel
+const categorias = Array.from(new Set(productos.map(p => p.categoria))).filter(Boolean);
+
+const [productos, setProductos] = useState<any[]>([]);
 
 const CATEGORIAS_DEFAULT = ['Abarrotes', 'Librería', 'Golosinas', 'Limpieza'];
 
 export default function HomeScreen() {
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT);
   
-  const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
-  const [editandoNombre, setEditandoNombre] = useState(false);
-  const [inputNombreTemp, setInputNombreTemp] = useState('');
-
+  const [productos, setProductos] = useState<Producto[]>([]);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
   const [nuevaCategoria, setNuevaCategoria] = useState<string>('Abarrotes');
-
-  const [modalCatVisible, setModalCatVisible] = useState(false);
-  const [nuevaCatInput, setNuevaCatInput] = useState('');
-  const [idConfirmandoBorradoCat, setIdConfirmandoBorradoCat] = useState<string | null>(null);
-
   const [busqueda, setBusqueda] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState<string>('Todos');
   const [ordenarPor, setOrdenarPor] = useState<CriterioOrden>('nombre');
   const [idConfirmandoBorrado, setIdConfirmandoBorrado] = useState<string | null>(null);
 
-  // Cargar datos persistentes del disco duro del celular al iniciar
+    // Sincronización en tiempo real con Firestore
   useEffect(() => {
-    const cargarInventarioLocal = async () => {
-      try {
-        // 1. Cargar Nombre de la Bodega
-        const infoNombre = await FileSystem.getInfoAsync(RUTA_ARCHIVO_NOMBRE_BODEGA);
-        if (infoNombre.exists) {
-          const nombreGuardado = await FileSystem.readAsStringAsync(RUTA_ARCHIVO_NOMBRE_BODEGA);
-          if (nombreGuardado.trim() !== '') {
-            setNombreBodega(nombreGuardado);
-            setInputNombreTemp(nombreGuardado);
-          }
-        } else {
-          setInputNombreTemp('Mi Bodega Pro');
-        }
+    const unsubscribe = onSnapshot(collection(db, 'productos'), (snapshot) => {
+      const listaProductos = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      setProductos(listaProductos);
+      setCargando(false);
+    }, (error) => {
+      console.error("Error al sincronizar productos: ", error);
+      setCargando(false);
+    });
 
-        // 2. Cargar Categorías Personalizadas
-        const infoCat = await FileSystem.getInfoAsync(RUTA_ARCHIVO_CATEGORIAS);
-        if (infoCat.exists) {
-          const catGuardadas = JSON.parse(await FileSystem.readAsStringAsync(RUTA_ARCHIVO_CATEGORIAS));
-          if (Array.isArray(catGuardadas) && catGuardadas.length > 0) {
-            setCategorias(catGuardadas);
-            setNuevaCategoria(catGuardadas[0]);
-          }
-        } else {
-          await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_CATEGORIAS, JSON.stringify(CATEGORIAS_DEFAULT));
-        }
-
-        // 3. Cargar Inventario
-        const infoArchivo = await FileSystem.getInfoAsync(RUTA_ARCHIVO_INVENTARIO);
-        if (infoArchivo.exists) {
-          const contenidoRaw = await FileSystem.readAsStringAsync(RUTA_ARCHIVO_INVENTARIO);
-          setProductos(JSON.parse(contenidoRaw));
-        } else {
-          const listaBase: Producto[] = [
-            { id: '1', nombre: 'Arroz Extra 1kg', precio: 4.55, categoria: 'Abarrotes', actualizadoEn: Date.now() },
-            { id: '2', nombre: 'Aceite Vegetal 1L', precio: 7.20, categoria: 'Abarrotes', actualizadoEn: Date.now() },
-            { id: '3', nombre: 'Gaseosa 500ml', precio: 2.50, categoria: 'Golosinas', actualizadoEn: Date.now() },
-          ];
-          setProductos(listaBase);
-          await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_INVENTARIO, JSON.stringify(listaBase));
-        }
-      } catch (e) {
-        console.log("Error al cargar local:", e);
-      }
-    };
-    cargarInventarioLocal();
+    return () => unsubscribe();
   }, []);
 
-  const guardarEnDisco = async (nuevaLista: Producto[]) => {
-    try {
-      await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_INVENTARIO, JSON.stringify(nuevaLista));
-    } catch (e) {
-      console.log("Error al salvar local:", e);
-    }
-  };
-
-  const guardarCategoriasEnDisco = async (nuevasCat: string[]) => {
-    try {
-      await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_CATEGORIAS, JSON.stringify(nuevasCat));
-    } catch (e) {
-      console.log("Error al salvar categorías:", e);
-    }
-  };
-
-  const guardarNombreBodega = async () => {
-    if (inputNombreTemp.trim() === '') return;
-    try {
-      await FileSystem.writeAsStringAsync(RUTA_ARCHIVO_NOMBRE_BODEGA, inputNombreTemp.trim());
-      setNombreBodega(inputNombreTemp.trim());
-      setEditandoNombre(false);
-    } catch (e) {
-      console.log("Error al guardar nombre:", e);
-    }
-  };
-
-  const agregarCategoria = (nombreSugerido?: string) => {
-    const catFinal = (nombreSugerido || nuevaCatInput).trim();
-    if (catFinal === '') return;
-    
-    if (categorias.some(c => c.toLowerCase() === catFinal.toLowerCase())) {
-      Alert.alert("Aviso", "Esta categoría ya existe.");
+    // 1. Agregar un producto nuevo a la nube
+  const handleAgregarProducto = async (nombreProd: string, precioProd: string, catProd: string) => {
+    if (!nombreProd.trim() || !precioProd.trim()) {
+      alert('Por favor ingresa el nombre y el precio.');
       return;
     }
 
-    const nuevasCat = [...categorias, catFinal];
-    setCategorias(nuevasCat);
-    guardarCategoriasEnDisco(nuevasCat);
-    setNuevaCatInput('');
+    try {
+      await addDoc(collection(db, 'productos'), {
+        nombre: nombreProd.trim(),
+        precio: parseFloat(precioProd),
+        categoria: catProd.trim() || 'General',
+        actualizadoEn: Date.now()
+      });
+
+      // Limpiamos las casillas del formulario local
+      setNombre('');
+      setPrecio('');
+      setCategoria('General');
+    } catch (error) {
+      console.error("Error al guardar en Firebase: ", error);
+    }
   };
 
-  const iniciarEliminarCategoria = (cat: string) => {
-    if (categorias.length <= 1) {
-      Alert.alert("No permitido", "Debes tener al menos una categoría.");
+  // 2. Cambiar el precio directamente en la nube usando el ID
+  const cambiarPrecio = async (id: string, nuevoPrecioStr: string) => {
+    const nuevoPrecio = parseFloat(nuevoPrecioStr);
+    if (isNaN(nuevoPrecio)) return;
+
+    try {
+      const productoRef = doc(db, 'productos', id);
+      await updateDoc(productoRef, {
+        precio: nuevoPrecio,
+        actualizadoEn: Date.now()
+      });
+    } catch (error) {
+      console.error("Error al actualizar el precio: ", error);
+    }
+  };
+
+  // 3. Borrar producto de la nube (con doble toque de seguridad)
+  const intentarEliminar = async (id: string) => {
+    if (idConfirmandoBorrado !== id) {
+      setIdConfirmandoBorrado(id);
+      setTimeout(() => setIdConfirmandoBorrado(null), 4000);
       return;
     }
-    setIdConfirmandoBorradoCat(cat);
-  };
 
-  const confirmarEliminarCategoria = (catAEliminar: string) => {
-    const nuevasCat = categorias.filter(c => c !== catAEliminar);
-    setCategorias(nuevasCat);
-    guardarCategoriasEnDisco(nuevasCat);
-
-    if (categoriaActiva === catAEliminar) setCategoriaActiva('Todos');
-    if (nuevaCategoria === catAEliminar) setNuevaCategoria(nuevasCat[0]);
-
-    setIdConfirmandoBorradoCat(null);
-  };
-
-  const agregarProducto = () => {
-    if (nuevoNombre.trim() === '' || nuevoPrecio.trim() === '') return;
-    const precioNum = parseFloat(nuevoPrecio);
-    if (isNaN(precioNum)) return;
-
-    const nuevoProd: Producto = {
-      id: Date.now().toString(),
-      nombre: nuevoNombre.trim(),
-      precio: precioNum,
-      categoria: nuevaCategoria,
-      actualizadoEn: Date.now()
-    };
-
-    const listaActualizada = [nuevoProd, ...productos];
-    setProductos(listaActualizada);
-    guardarEnDisco(listaActualizada);
-    setNuevoNombre('');
-    setNuevoPrecio('');
-  };
-
-  const intentarEliminar = (id: string) => {
-    if (idConfirmandoBorrado === id) {
-      const listaActualizada = productos.filter(prod => prod.id !== id);
-      setProductos(listaActualizada);
-      guardarEnDisco(listaActualizada);
+    try {
+      await deleteDoc(doc(db, 'productos', id));
       setIdConfirmandoBorrado(null);
+    } catch (error) {
+      console.error("Error al eliminar de Firebase: ", error);
+    }
+  };
+
+    // 1. Generar la lista de categorías únicas automáticamente desde los productos actuales
+  const categoriasDinamicas = [
+    'Todas', 
+    ...Array.from(new Set(productos.map(p => p.categoria || 'General')))
+  ];
+
+  // 2. Filtrar los productos según la categoría seleccionada y la barra de búsqueda
+  const productosFiltrados = productos.filter(p => {
+    const coincideCategoria = categoriaSeleccionada === 'Todas' || p.categoria === categoriaSeleccionada;
+    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
+    return coincideCategoria && coincideBusqueda;
+  });
+
+  
+    const intentarEliminar = async (id: string) => {
+    if (idConfirmandoBorrado === id) {
+      try {
+        // Borra el producto de Firestore usando su ID único
+        await deleteDoc(doc(db, 'productos', id));
+        setIdConfirmandoBorrado(null);
+      } catch (error) {
+        console.error("Error al eliminar el producto: ", error);
+      }
     } else {
       setIdConfirmandoBorrado(id);
+      // Opcional: si quieres que el mensaje de "¿Borrar?" se quite solo a los 4 segundos si no presionan de nuevo
+      setTimeout(() => setIdConfirmandoBorrado(null), 4000);
     }
   };
 
-  const cambiarPrecio = (id: string, nuevoPrecioTexto: string) => {
-    const precioNumerico = parseFloat(nuevoPrecioTexto);
-    if (isNaN(precioNumerico)) return;
 
-    const listaActualizada = productos.map(prod => 
-      prod.id === id ? { ...prod, precio: precioNumerico, actualizadoEn: Date.now() } : prod
-    );
-    setProductos(listaActualizada);
-    guardarEnDisco(listaActualizada);
+    // Función para actualizar el precio en tiempo real con Firebase
+  const cambiarPrecio = async (id: string, nuevoPrecioStr: string) => {
+    const nuevoPrecio = parseFloat(nuevoPrecioStr);
+    if (isNaN(nuevoPrecio)) return;
+
+    try {
+      const productoRef = doc(db, 'productos', id);
+      await updateDoc(productoRef, {
+        precio: nuevoPrecio,
+        actualizadoEn: Date.now()
+      });
+    } catch (error) {
+      console.error("Error al actualizar precio: ", error);
+    }
   };
-
-  const productosProcesados = productos
-    .filter(prod => {
+  
+  const productosProcesados = productos.filter(prod => {
       const coincideBusqueda = prod.nombre.toLowerCase().includes(busqueda.toLowerCase());
       const coincideCategoria = categoriaActiva === 'Todos' || prod.categoria === categoriaActiva;
       return coincideBusqueda && coincideCategoria;
@@ -203,14 +173,51 @@ export default function HomeScreen() {
       return a.nombre.localeCompare(b.nombre);
     });
 
-// src/screens/HomeScreen.tsx (PARTE 2 - Continuación)
-  return (
+    // --- AGREGAR PRODUCTO A FIRESTORE ---
+  const handleAgregarProducto = async () => {
+    // Validamos que no estén vacíos los campos principales
+    if (!nombre.trim() || !precio.trim()) {
+      alert('Por favor ingresa el nombre y el precio.');
+      return;
+    }
+
+    try {
+      // addDoc crea un nuevo documento con un ID automático en la colección "productos"
+      await addDoc(collection(db, 'productos'), {
+        nombre: nombre.trim(),
+        precio: parseFloat(precio),
+        categoria: categoria.trim() || 'General',
+        createdAt: new Date()
+      });
+
+      // Limpiamos los inputs después de guardar con éxito
+      setNombre('');
+      setPrecio('');
+      setCategoria('');
+    } catch (error) {
+      console.error("Error al guardar el producto: ", error);
+      alert('No se pudo guardar el producto en la nube.');
+    }
+  };
+
+  // --- ELIMINAR PRODUCTO DE FIRESTORE ---
+  const handleEliminarProducto = async (id: string) => {
+    try {
+      // doc() busca el producto exacto por su ID único y deleteDoc lo borra de la nube
+      await deleteDoc(doc(db, 'productos', id));
+    } catch (error) {
+      console.error("Error al eliminar el producto: ", error);
+      alert('No se pudo eliminar el producto.');
+    }
+  };
+
+    return (
       <ScrollView 
           style={styles.contenedor} 
           keyboardShouldPersistTaps="handled">
         <Pressable style={{ flex: 1 }} onPress={() => { setIdConfirmandoBorrado(null); setIdConfirmandoBorradoCat(null); }}>
           
-        {/* ENCABEZADO DE BODEGA DINÁMICO (MANTENER PRESIONADO PARA EDITAR) */}
+        {/* ENCABEZADO DE BODEGA DINÁMICO */}
         <View style={styles.cajaHeader}>
           {!editandoNombre ? (
             <Pressable onLongPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }} style={{ width: '100%', alignItems: 'center' }}>
@@ -242,61 +249,7 @@ export default function HomeScreen() {
         <View style={styles.cajaFormulario}>
           <View style={styles.filaTituloConBoton}>
             <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
-            <TouchableOpacity style={styles.botonAbrirCategorias} onPress={() => setModalCatVisible(!modalCatVisible)}>
-              <Text style={styles.textoBotonAbrirCat}>⚙️</Text>
-            </TouchableOpacity>
           </View>
-
-          {/* PANEL DE GESTIÓN DE CATEGORÍAS (COLAPSIBLE) */}
-          {modalCatVisible && (
-            <View style={styles.panelGestionCat}>
-              <Text style={styles.labelPanelCat}>Añadir nueva categoría:</Text>
-              <View style={styles.filaForm}>
-                <TextInput
-                  style={[styles.inputForm, { flex: 1, marginRight: 8, marginBottom: 0 }]}
-                  placeholder="Ej. Bebidas, Lácteos..."
-                  placeholderTextColor="#999"
-                  value={nuevaCatInput}
-                  onChangeText={setNuevaCatInput}
-                />
-                <TouchableOpacity style={styles.botonGuardarCat} onPress={() => agregarCategoria()}>
-                  <Text style={styles.textoBoton}>+ Agregar</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Sugerencias rápidas:</Text>
-              <View style={styles.sugerenciasContainer}>
-                {['Bebidas', 'Lácteos', 'Frutas y Verduras', 'Higiene', 'Mascotas', 'Snacks'].map(sug => (
-                  !categorias.includes(sug) && (
-                    <TouchableOpacity key={sug} style={styles.chipSugerencia} onPress={() => agregarCategoria(sug)}>
-                      <Text style={styles.textoChipSugerencia}>+ {sug}</Text>
-                    </TouchableOpacity>
-                  )
-                ))}
-              </View>
-
-              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categorías actuales (Mantén presionado para borrar):</Text>
-              <View style={styles.listaBorrarCat}>
-                {categorias.map(cat => {
-                  const esBorrandoCat = idConfirmandoBorradoCat === cat;
-                  return (
-                    <Pressable 
-                      key={cat} 
-                      style={[styles.badgeBorrarCat, esBorrandoCat && styles.badgeBorrarCatAlerta]} 
-                      onLongPress={() => iniciarEliminarCategoria(cat)}
-                      onPress={() => {
-                        if (esBorrandoCat) confirmarEliminarCategoria(cat);
-                      }}
-                    >
-                      <Text style={[styles.textoBadgeBorrar, esBorrandoCat && styles.textoBadgeBorrarAlerta]}>
-                        {cat} {esBorrandoCat ? '❓(¿Pulsa para borrar?)' : ''}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          )}
 
           <TextInput
             style={[styles.inputForm, { marginTop: 8 }]}
@@ -318,17 +271,16 @@ export default function HomeScreen() {
               <Text style={styles.textoBoton}>+ Guardar</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.contenedorSelectCategoria}>
-            {categorias.map(cat => (
-              <TouchableOpacity 
-                key={cat} 
-                style={[styles.opcionMiniCat, nuevaCategoria === cat && styles.opcionMiniCatActiva]}
-                onPress={() => setNuevaCategoria(cat)}
-              >
-                <Text style={[styles.textoMiniCat, nuevaCategoria === cat && styles.textoMiniCatActivo]}>{cat}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+
+          {/* Selector de categoría al crear el producto */}
+          <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categoría:</Text>
+          <TextInput
+            style={[styles.inputForm, { marginTop: 4 }]}
+            placeholder="Ej. Abarrotes, Bebidas (se crea sola)"
+            placeholderTextColor="#999"
+            value={nuevaCategoria}
+            onChangeText={setNuevaCategoria}
+          />
         </View>
 
         {/* CONTROLES DE BUSCADOR Y FILTROS */}
@@ -340,23 +292,20 @@ export default function HomeScreen() {
             value={busqueda}
             onChangeText={setBusqueda}
           />
+          
+          {/* Carrusel de categorías dinámicas (¡Incluye 'Todas' y las que existan en la nube!) */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carruselCategorias}>
-            <TouchableOpacity 
-              style={[styles.pestañaCat, categoriaActiva === 'Todos' && styles.pestañaCatActiva]}
-              onPress={() => setCategoriaActiva('Todos')}
-            >
-              <Text style={[styles.textoPestaña, categoriaActiva === 'Todos' && styles.textoPestañaActiva]}>Todos</Text>
-            </TouchableOpacity>
-            {categorias.map(cat => (
+            {categoriasDinamicas.map(cat => (
               <TouchableOpacity 
                 key={cat} 
-                style={[styles.pestañaCat, categoriaActiva === cat && styles.pestañaCatActiva]}
-                onPress={() => setCategoriaActiva(cat)}
+                style={[styles.pestañaCat, categoriaSeleccionada === cat && styles.pestañaCatActiva]}
+                onPress={() => setCategoriaSeleccionada(cat)}
               >
-                <Text style={[styles.textoPestaña, categoriaActiva === cat && styles.textoPestañaActiva]}>{cat}</Text>
+                <Text style={[styles.textoPestaña, categoriaSeleccionada === cat && styles.textoPestañaActiva]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+
           <View style={styles.filaOrdenamiento}>
             <Text style={styles.labelOrden}>Orden:</Text>
             <TouchableOpacity style={[styles.botonOrden, ordenarPor === 'nombre' && styles.botonOrdenActivo]} onPress={() => setOrdenarPor('nombre')}>
@@ -369,8 +318,8 @@ export default function HomeScreen() {
         </View>
 
         {/* TARJETAS DE PRODUCTOS */}
-        <Text style={styles.subtituloSeccion}>Productos en vista ({productosProcesados.length})</Text>
-        {productosProcesados.map((item) => {
+        <Text style={styles.subtituloSeccion}>Productos en vista ({productosFiltrados.length})</Text>
+        {productosFiltrados.map((item) => {
           const esReciente = (Date.now() - item.actualizadoEn) < 12000;
           const esBorrando = idConfirmandoBorrado === item.id;
           return (
@@ -398,7 +347,7 @@ export default function HomeScreen() {
             </View>
           );
         })}
-        {productosProcesados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
+        {productosFiltrados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
         <View style={{ height: 40 }} />
         </Pressable>
       </ScrollView>
