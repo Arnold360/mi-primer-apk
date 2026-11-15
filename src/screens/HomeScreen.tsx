@@ -130,23 +130,6 @@ export default function HomeScreen() {
   });
 
   
-    const intentarEliminar = async (id: string) => {
-    if (idConfirmandoBorrado === id) {
-      try {
-        // Borra el producto de Firestore usando su ID único
-        await deleteDoc(doc(db, 'productos', id));
-        setIdConfirmandoBorrado(null);
-      } catch (error) {
-        console.error("Error al eliminar el producto: ", error);
-      }
-    } else {
-      setIdConfirmandoBorrado(id);
-      // Opcional: si quieres que el mensaje de "¿Borrar?" se quite solo a los 4 segundos si no presionan de nuevo
-      setTimeout(() => setIdConfirmandoBorrado(null), 4000);
-    }
-  };
-
-
     // Función para actualizar el precio en tiempo real con Firebase
   const cambiarPrecio = async (id: string, nuevoPrecioStr: string) => {
     const nuevoPrecio = parseFloat(nuevoPrecioStr);
