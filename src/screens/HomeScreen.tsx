@@ -130,22 +130,6 @@ export default function HomeScreen() {
   });
 
   
-    // Función para actualizar el precio en tiempo real con Firebase
-  const cambiarPrecio = async (id: string, nuevoPrecioStr: string) => {
-    const nuevoPrecio = parseFloat(nuevoPrecioStr);
-    if (isNaN(nuevoPrecio)) return;
-
-    try {
-      const productoRef = doc(db, 'productos', id);
-      await updateDoc(productoRef, {
-        precio: nuevoPrecio,
-        actualizadoEn: Date.now()
-      });
-    } catch (error) {
-      console.error("Error al actualizar precio: ", error);
-    }
-  };
-  
   const productosProcesados = productos.filter(prod => {
       const coincideBusqueda = prod.nombre.toLowerCase().includes(busqueda.toLowerCase());
       const coincideCategoria = categoriaActiva === 'Todos' || prod.categoria === categoriaActiva;
