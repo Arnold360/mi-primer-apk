@@ -140,22 +140,7 @@ export default function HomeScreen() {
       return a.nombre.localeCompare(b.nombre);
     });
 
-    // --- AGREGAR PRODUCTO A FIRESTORE ---
-  const handleAgregarProducto = async () => {
-    // Validamos que no estén vacíos los campos principales
-    if (!nombre.trim() || !precio.trim()) {
-      alert('Por favor ingresa el nombre y el precio.');
-      return;
-    }
-
-    try {
-      // addDoc crea un nuevo documento con un ID automático en la colección "productos"
-      await addDoc(collection(db, 'productos'), {
-        nombre: nombre.trim(),
-        precio: parseFloat(precio),
-        categoria: categoria.trim() || 'General',
-        createdAt: new Date()
-      });
+    
 
       // Limpiamos los inputs después de guardar con éxito
       setNombre('');
