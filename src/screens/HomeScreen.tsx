@@ -1,8 +1,7 @@
-// src/screens/HomeScreen.tsx (PARTE 1)
+// src/screens/HomeScreen.tsx (PARTE 1 CORREGIDA)
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { db } from '../firebaseConfig'; // (O ajusta la ruta si tu firebaseConfig está en otra carpeta)
+import { db } from '../firebaseConfig';
 import { 
   collection, 
   onSnapshot, 
@@ -11,7 +10,6 @@ import {
   deleteDoc, 
   doc 
 } from 'firebase/firestore';
-
 
 interface Producto {
   id: string;
@@ -23,33 +21,35 @@ interface Producto {
 
 type CriterioOrden = 'nombre' | 'recientes';
 
-const RUTA_ARCHIVO_INVENTARIO = FileSystem.documentDirectory + 'inventario_bodega.json';
-const RUTA_ARCHIVO_NOMBRE_BODEGA = FileSystem.documentDirectory + 'nombre_bodega.txt';
-  // Extrae las categorías únicas de los productos de Firebase para el carrusel
-const categorias = Array.from(new Set(productos.map(p => p.categoria))).filter(Boolean);
-
-const [productos, setProductos] = useState<any[]>([]);
-
-const CATEGORIAS_DEFAULT = ['Abarrotes', 'Librería', 'Golosinas', 'Limpieza'];
-
 export default function HomeScreen() {
-  
+  // 1. Estados principales dentro del componente
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
   const [nuevaCategoria, setNuevaCategoria] = useState<string>('Abarrotes');
   const [busqueda, setBusqueda] = useState('');
-  const [categoriaActiva, setCategoriaActiva] = useState<string>('Todos');
+  
+  // Usamos categoriaSeleccionada (o categoriaActiva, asegúrate de mantener el mismo nombre que uses en tu return)
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('Todos');
   const [ordenarPor, setOrdenarPor] = useState<CriterioOrden>('nombre');
   const [idConfirmandoBorrado, setIdConfirmandoBorrado] = useState<string | null>(null);
 
-    // Sincronización en tiempo real con Firestore
+  // Estados adicionales que tenías en tu interfaz visual (asegúrate de tenerlos declarados)
+  const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [inputNombreTemp, setInputNombreTemp] = useState('');
+  const [modalCatVisible, setModalCatVisible] = useState(false);
+  const [nuevaCatInput, setNuevaCatInput] = useState('');
+  const [idConfirmandoBorradoCat, setIdConfirmandoBorradoCat] = useState<string | null>(null);
+
+  // 2. Sincronización en tiempo real con Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'productos'), (snapshot) => {
       const listaProductos = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
-      }));
+      })) as Producto[];
       setProductos(listaProductos);
       setCargando(false);
     }, (error) => {
@@ -59,6 +59,25 @@ export default function HomeScreen() {
 
     return () => unsubscribe();
   }, []);
+
+  // 3. Categorías dinámicas calculadas de forma segura DENTRO del componente
+  const categoriasDinamicas = ['Todos', ...Array.from(new Set(productos.map(p => p.categoria))).filter(Boolean)];
+
+  // 4. Filtrado y ordenamiento de productos
+  const productosFiltrados = productos
+    .filter(item => {
+      const coincideBusqueda = item.nombre.toLowerCase().includes(busqueda.toLowerCase());
+      const coincideCategoria = categoriaSeleccionada === 'Todos' || item.categoria === categoriaSeleccionada;
+      return coincideBusqueda && coincideCategoria;
+    })
+    .sort((a, b) => {
+      if (ordenarPor === 'nombre') {
+        return a.nombre.localeCompare(b.nombre);
+      } else {
+        return b.actualizadoEn - a.actualizadoEn;
+      }
+    });
+
 
     // 1. Agregar un producto nuevo a la nube
   const handleAgregarProducto = async (nombreProd: string, precioProd: string, catProd: string) => {
