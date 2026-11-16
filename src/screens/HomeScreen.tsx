@@ -142,16 +142,6 @@ export default function HomeScreen() {
 
     
 
-      // Limpiamos los inputs después de guardar con éxito
-      setNombre('');
-      setPrecio('');
-      setCategoria('');
-    } catch (error) {
-      console.error("Error al guardar el producto: ", error);
-      alert('No se pudo guardar el producto en la nube.');
-    }
-  };
-
   // --- ELIMINAR PRODUCTO DE FIRESTORE ---
   const handleEliminarProducto = async (id: string) => {
     try {
