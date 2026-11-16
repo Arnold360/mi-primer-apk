@@ -135,21 +135,8 @@ export default function HomeScreen() {
     }
   };
 
-    // 1. Generar la lista de categorías únicas automáticamente desde los productos actuales
-  const categoriasDinamicas = [
-    'Todas', 
-    ...Array.from(new Set(productos.map(p => p.categoria || 'General')))
-  ];
-
-  // 2. Filtrar los productos según la categoría seleccionada y la barra de búsqueda
-  const productosFiltrados = productos.filter(p => {
-    const coincideCategoria = categoriaSeleccionada === 'Todas' || p.categoria === categoriaSeleccionada;
-    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
-    return coincideCategoria && coincideBusqueda;
-  });
-
-  
-  const productosProcesados = productos.filter(prod => {
+    
+ const productosProcesados = productos.filter(prod => {
       const coincideBusqueda = prod.nombre.toLowerCase().includes(busqueda.toLowerCase());
       const coincideCategoria = categoriaActiva === 'Todos' || prod.categoria === categoriaActiva;
       return coincideBusqueda && coincideCategoria;
