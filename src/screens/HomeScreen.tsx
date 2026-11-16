@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { db } from './firebaseConfig'; // (O ajusta la ruta si tu firebaseConfig está en otra carpeta)
+import { db } from '../firebaseConfig'; // (O ajusta la ruta si tu firebaseConfig está en otra carpeta)
 import { 
   collection, 
   onSnapshot, 
