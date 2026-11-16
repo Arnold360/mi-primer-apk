@@ -1,6 +1,6 @@
-// src/screens/HomeScreen.tsx (PARTE 1 CORREGIDA)
+// src/screens/HomeScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { db } from '../firebaseConfig';
 import { 
   collection, 
@@ -22,7 +22,6 @@ interface Producto {
 type CriterioOrden = 'nombre' | 'recientes';
 
 export default function HomeScreen() {
-  // 1. Estados principales dentro del componente
   const [productos, setProductos] = useState<Producto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [nuevoNombre, setNuevoNombre] = useState('');
@@ -30,20 +29,14 @@ export default function HomeScreen() {
   const [nuevaCategoria, setNuevaCategoria] = useState<string>('Abarrotes');
   const [busqueda, setBusqueda] = useState('');
   
-  // Usamos categoriaSeleccionada (o categoriaActiva, asegúrate de mantener el mismo nombre que uses en tu return)
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('Todos');
   const [ordenarPor, setOrdenarPor] = useState<CriterioOrden>('nombre');
   const [idConfirmandoBorrado, setIdConfirmandoBorrado] = useState<string | null>(null);
 
-  // Estados adicionales que tenías en tu interfaz visual (asegúrate de tenerlos declarados)
   const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [inputNombreTemp, setInputNombreTemp] = useState('');
-  const [modalCatVisible, setModalCatVisible] = useState(false);
-  const [nuevaCatInput, setNuevaCatInput] = useState('');
-  const [idConfirmandoBorradoCat, setIdConfirmandoBorradoCat] = useState<string | null>(null);
 
-  // 2. Sincronización en tiempo real con Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'productos'), (snapshot) => {
       const listaProductos = snapshot.docs.map(docSnap => ({
@@ -60,50 +53,37 @@ export default function HomeScreen() {
     return () => unsubscribe();
   }, []);
 
-  // 3. Categorías dinámicas calculadas de forma segura DENTRO del componente
   const categoriasDinamicas = ['Todos', ...Array.from(new Set(productos.map(p => p.categoria))).filter(Boolean)];
 
-  // 4. Filtrado y ordenamiento de productos
-  const productosFiltrados = productos
-    .filter(item => {
-      const coincideBusqueda = item.nombre.toLowerCase().includes(busqueda.toLowerCase());
-      const coincideCategoria = categoriaSeleccionada === 'Todos' || item.categoria === categoriaSeleccionada;
-      return coincideBusqueda && coincideCategoria;
-    })
-    .sort((a, b) => {
-      if (ordenarPor === 'nombre') {
-        return a.nombre.localeCompare(b.nombre);
-      } else {
-        return b.actualizadoEn - a.actualizadoEn;
-      }
-    });
-
-
-    // 1. Agregar un producto nuevo a la nube
-  const handleAgregarProducto = async (nombreProd: string, precioProd: string, catProd: string) => {
-    if (!nombreProd.trim() || !precioProd.trim()) {
+  const handleAgregarProducto = async () => {
+    if (!nuevoNombre.trim() || !nuevoPrecio.trim()) {
       alert('Por favor ingresa el nombre y el precio.');
+      return;
+    }
+
+    const precioNum = parseFloat(nuevoPrecio);
+    if (isNaN(precioNum)) {
+      alert('El precio debe ser un número válido.');
       return;
     }
 
     try {
       await addDoc(collection(db, 'productos'), {
-        nombre: nombreProd.trim(),
-        precio: parseFloat(precioProd),
-        categoria: catProd.trim() || 'General',
+        nombre: nuevoNombre.trim(),
+        precio: precioNum,
+        categoria: nuevaCategoria.trim() || 'General',
         actualizadoEn: Date.now()
       });
 
-      // Limpiamos las casillas del formulario local
-      setNombre('');
-      setPrecio('');
-      setCategoria('General');
+      setNuevoNombre('');
+      setNuevoPrecio('');
+      setNuevaCategoria('Abarrotes');
     } catch (error) {
       console.error("Error al guardar en Firebase: ", error);
+      alert('No se pudo guardar el producto.');
     }
   };
 
-  // 2. Cambiar el precio directamente en la nube usando el ID
   const cambiarPrecio = async (id: string, nuevoPrecioStr: string) => {
     const nuevoPrecio = parseFloat(nuevoPrecioStr);
     if (isNaN(nuevoPrecio)) return;
@@ -119,7 +99,6 @@ export default function HomeScreen() {
     }
   };
 
-  // 3. Borrar producto de la nube (con doble toque de seguridad)
   const intentarEliminar = async (id: string) => {
     if (idConfirmandoBorrado !== id) {
       setIdConfirmandoBorrado(id);
@@ -135,10 +114,17 @@ export default function HomeScreen() {
     }
   };
 
-    
- const productosProcesados = productos.filter(prod => {
-      const coincideBusqueda = prod.nombre.toLowerCase().includes(busqueda.toLowerCase());
-      const coincideCategoria = categoriaActiva === 'Todos' || prod.categoria === categoriaActiva;
+  const guardarNombreBodega = () => {
+    if (inputNombreTemp.trim()) {
+      setNombreBodega(inputNombreTemp.trim());
+    }
+    setEditandoNombre(false);
+  };
+
+  const productosFiltrados = productos
+    .filter(item => {
+      const coincideBusqueda = item.nombre.toLowerCase().includes(busqueda.toLowerCase());
+      const coincideCategoria = categoriaSeleccionada === 'Todos' || item.categoria === categoriaSeleccionada;
       return coincideBusqueda && coincideCategoria;
     })
     .sort((a, b) => {
@@ -146,26 +132,10 @@ export default function HomeScreen() {
       return a.nombre.localeCompare(b.nombre);
     });
 
-    
-
-  // --- ELIMINAR PRODUCTO DE FIRESTORE ---
-  const handleEliminarProducto = async (id: string) => {
-    try {
-      // doc() busca el producto exacto por su ID único y deleteDoc lo borra de la nube
-      await deleteDoc(doc(db, 'productos', id));
-    } catch (error) {
-      console.error("Error al eliminar el producto: ", error);
-      alert('No se pudo eliminar el producto.');
-    }
-  };
-
-    return (
-      <ScrollView 
-          style={styles.contenedor} 
-          keyboardShouldPersistTaps="handled">
-        <Pressable style={{ flex: 1 }} onPress={() => { setIdConfirmandoBorrado(null); setIdConfirmandoBorradoCat(null); }}>
-          
-        {/* ENCABEZADO DE BODEGA DINÁMICO */}
+  return (
+    <ScrollView style={styles.contenedor} keyboardShouldPersistTaps="handled">
+      <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
+        
         <View style={styles.cajaHeader}>
           {!editandoNombre ? (
             <Pressable onLongPress={() => { setInputNombreTemp(nombreBodega); setEditandoNombre(true); }} style={{ width: '100%', alignItems: 'center' }}>
@@ -193,7 +163,6 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* FORMULARIO */}
         <View style={styles.cajaFormulario}>
           <View style={styles.filaTituloConBoton}>
             <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
@@ -215,23 +184,21 @@ export default function HomeScreen() {
               value={nuevoPrecio}
               onChangeText={setNuevoPrecio}
             />
-            <TouchableOpacity style={styles.botonGuardar} onPress={agregarProducto}>
+            <TouchableOpacity style={styles.botonGuardar} onPress={handleAgregarProducto}>
               <Text style={styles.textoBoton}>+ Guardar</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Selector de categoría al crear el producto */}
           <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categoría:</Text>
           <TextInput
             style={[styles.inputForm, { marginTop: 4 }]}
-            placeholder="Ej. Abarrotes, Bebidas (se crea sola)"
+            placeholder="Ej. Abarrotes, Bebidas"
             placeholderTextColor="#999"
             value={nuevaCategoria}
             onChangeText={setNuevaCategoria}
           />
         </View>
 
-        {/* CONTROLES DE BUSCADOR Y FILTROS */}
         <View style={styles.seccionFiltros}>
           <TextInput
             style={styles.barraBusqueda}
@@ -241,7 +208,6 @@ export default function HomeScreen() {
             onChangeText={setBusqueda}
           />
           
-          {/* Carrusel de categorías dinámicas (¡Incluye 'Todas' y las que existan en la nube!) */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carruselCategorias}>
             {categoriasDinamicas.map(cat => (
               <TouchableOpacity 
@@ -265,40 +231,43 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* TARJETAS DE PRODUCTOS */}
         <Text style={styles.subtituloSeccion}>Productos en vista ({productosFiltrados.length})</Text>
-        {productosFiltrados.map((item) => {
-          const esReciente = (Date.now() - item.actualizadoEn) < 12000;
-          const esBorrando = idConfirmandoBorrado === item.id;
-          return (
-            <View key={item.id} style={[styles.tarjetaProducto, esReciente && styles.tarjetaResaltada]}>
-              <View style={styles.infoProducto}>
-                <View style={styles.filaNombre}>
-                  <Text style={styles.nombreProducto} numberOfLines={1} elipsizeMode="tail">{item.nombre}</Text>
-                  {esReciente && <Text style={styles.badgeModificado}>¡Ok!</Text>}
+        {cargando ? (
+          <Text style={styles.textoVacio}>Sincronizando con la nube...</Text>
+        ) : (
+          productosFiltrados.map((item) => {
+            const esReciente = (Date.now() - item.actualizadoEn) < 12000;
+            const esBorrando = idConfirmandoBorrado === item.id;
+            return (
+              <View key={item.id} style={[styles.tarjetaProducto, esReciente && styles.tarjetaResaltada]}>
+                <View style={styles.infoProducto}>
+                  <View style={styles.filaNombre}>
+                    <Text style={styles.nombreProducto} numberOfLines={1}>{item.nombre}</Text>
+                    {esReciente && <Text style={styles.badgeModificado}>¡Ok!</Text>}
+                  </View>
+                  <Text style={styles.tagCategoria}>{item.categoria}</Text>
+                  <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
                 </View>
-                <Text style={styles.tagCategoria}>{item.categoria}</Text>
-                <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
+                <View style={styles.accionesProducto}>
+                  <TextInput
+                    style={styles.inputCorto}
+                    keyboardType="numeric"
+                    placeholder="Editar"
+                    placeholderTextColor="#999"
+                    onChangeText={(txt) => cambiarPrecio(item.id, txt)}
+                  />
+                  <TouchableOpacity style={[styles.botonEliminar, esBorrando && styles.botonEliminarAlerta]} onPress={() => intentarEliminar(item.id)}>
+                    <Text style={[styles.textoEliminar, esBorrando && styles.textoEliminarAlerta]}>{esBorrando ? '¿Borrar?' : '🗑️'}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.accionesProducto}>
-                <TextInput
-                  style={styles.inputCorto}
-                  keyboardType="numeric"
-                  placeholder="Editar"
-                  placeholderTextColor="#999"
-                  onChangeText={(txt) => cambiarPrecio(item.id, txt)}
-                />
-                <TouchableOpacity style={[styles.botonEliminar, esBorrando && styles.botonEliminarAlerta]} onPress={() => intentarEliminar(item.id)}>
-                  <Text style={[styles.textoEliminar, esBorrando && styles.textoEliminarAlerta]}>{esBorrando ? '¿Borrar?' : '🗑️'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
-        {productosFiltrados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
+            );
+          })
+        )}
+        {!cargando && productosFiltrados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
         <View style={{ height: 40 }} />
-        </Pressable>
-      </ScrollView>
+      </Pressable>
+    </ScrollView>
   );
 }
 
@@ -313,35 +282,15 @@ const styles = StyleSheet.create({
   textoAccionNombre: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
   botonCancelarNombre: { backgroundColor: '#F1F5F9', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' },
   textoAccionCancelar: { color: '#475569', fontSize: 13, fontWeight: '600' },
-
   subtituloSeccion: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 10, marginTop: 5 },
   cajaFormulario: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
   filaTituloConBoton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   tituloFormulario: { fontSize: 13, fontWeight: '700', color: '#475569' },
-  botonAbrirCategorias: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
-  textoBotonAbrirCat: { fontSize: 13, color: '#475569' },
-  
-  panelGestionCat: { backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', marginVertical: 8 },
   labelPanelCat: { fontSize: 11, fontWeight: '600', color: '#64748B', marginBottom: 4 },
-  sugerenciasContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  chipSugerencia: { backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD' },
-  textoChipSugerencia: { fontSize: 11, color: '#0369A1', fontWeight: '600' },
-  listaBorrarCat: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  badgeBorrarCat: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' },
-  badgeBorrarCatAlerta: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-  textoBadgeBorrar: { fontSize: 11, color: '#334155', fontWeight: '600' },
-  textoBadgeBorrarAlerta: { color: '#DC2626' },
-  botonGuardarCat: { backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
-
   inputForm: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', fontSize: 14 },
   filaForm: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   botonGuardar: { backgroundColor: '#0284C7', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
   textoBoton: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-  contenedorSelectCategoria: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
-  opcionMiniCat: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' },
-  opcionMiniCatActiva: { backgroundColor: '#0284C7', borderColor: '#0284C7' },
-  textoMiniCat: { fontSize: 12, color: '#475569' },
-  textoMiniCatActivo: { color: '#FFFFFF', fontWeight: '600' },
   seccionFiltros: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
   barraBusqueda: { backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0', color: '#333', marginBottom: 10 },
   carruselCategorias: { flexDirection: 'row', marginBottom: 10 },
