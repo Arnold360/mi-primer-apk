@@ -1,6 +1,6 @@
 // src/screens/HomeScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInpu t, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { db } from '../firebaseConfig';
 import { 
   collection, 
