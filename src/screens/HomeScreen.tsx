@@ -19,10 +19,17 @@ interface Producto {
   actualizadoEn: number;
 }
 
+interface ProductoPapelera extends Producto {
+  eliminadoEn: number;
+}
+
 type CriterioOrden = 'nombre' | 'recientes';
 
 export default function HomeScreen() {
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [papelera, setPapelera] = useState<ProductoPapelera[]>([]);
+  const [verPapelera, setVerPapelera] = useState(false);
+
   const [cargando, setCargando] = useState(true);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
@@ -32,13 +39,14 @@ export default function HomeScreen() {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('Todos');
   const [ordenarPor, setOrdenarPor] = useState<CriterioOrden>('nombre');
   const [idConfirmandoBorrado, setIdConfirmandoBorrado] = useState<string | null>(null);
+  const [idConfirmandoDefinitivo, setIdConfirmandoDefinitivo] = useState<string | null>(null);
 
   const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [inputNombreTemp, setInputNombreTemp] = useState('');
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'productos'), (snapshot) => {
+    const unsubscribeProductos = onSnapshot(collection(db, 'productos'), (snapshot) => {
       const listaProductos = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
@@ -50,7 +58,21 @@ export default function HomeScreen() {
       setCargando(false);
     });
 
-    return () => unsubscribe();
+    const unsubscribePapelera = onSnapshot(collection(db, 'papelera'), (snapshot) => {
+      const listaPapelera = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      })) as ProductoPapelera[];
+      listaPapelera.sort((a, b) => (b.eliminadoEn || 0) - (a.eliminadoEn || 0));
+      setPapelera(listaPapelera);
+    }, (error) => {
+      console.error("Error al sincronizar papelera: ", error);
+    });
+
+    return () => {
+      unsubscribeProductos();
+      unsubscribePapelera();
+    };
   }, []);
 
   const categoriasDinamicas = ['Todos', ...Array.from(new Set(productos.map(p => p.categoria))).filter(Boolean)];
@@ -99,18 +121,57 @@ export default function HomeScreen() {
     }
   };
 
-  const intentarEliminar = async (id: string) => {
-    if (idConfirmandoBorrado !== id) {
-      setIdConfirmandoBorrado(id);
+  const intentarEliminar = async (item: Producto) => {
+    if (idConfirmandoBorrado !== item.id) {
+      setIdConfirmandoBorrado(item.id);
       setTimeout(() => setIdConfirmandoBorrado(null), 4000);
       return;
     }
 
     try {
-      await deleteDoc(doc(db, 'productos', id));
+      await addDoc(collection(db, 'papelera'), {
+        nombre: item.nombre,
+        precio: item.precio,
+        categoria: item.categoria,
+        actualizadoEn: item.actualizadoEn || Date.now(),
+        eliminadoEn: Date.now()
+      });
+      await deleteDoc(doc(db, 'productos', item.id));
       setIdConfirmandoBorrado(null);
     } catch (error) {
-      console.error("Error al eliminar de Firebase: ", error);
+      console.error("Error al mover a papelera: ", error);
+      alert('No se pudo mover el producto a la papelera.');
+    }
+  };
+
+  const restaurarProducto = async (item: ProductoPapelera) => {
+    try {
+      await addDoc(collection(db, 'productos'), {
+        nombre: item.nombre,
+        precio: item.precio,
+        categoria: item.categoria,
+        actualizadoEn: Date.now()
+      });
+      await deleteDoc(doc(db, 'papelera', item.id));
+    } catch (error) {
+      console.error("Error al restaurar producto: ", error);
+      alert('No se pudo restaurar el producto.');
+    }
+  };
+
+  const eliminarDefinitivamente = async (id: string) => {
+    if (idConfirmandoDefinitivo !== id) {
+      setIdConfirmandoDefinitivo(id);
+      setTimeout(() => setIdConfirmandoDefinitivo(null), 4000);
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'papelera', id));
+      setIdConfirmandoDefinitivo(null);
+    } catch (error) {
+      console.error("Error al eliminar definitivamente: ", error);
+      alert('No se pudo eliminar el producto.');
     }
   };
 
@@ -134,7 +195,13 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.contenedor} keyboardShouldPersistTaps="handled">
-      <Pressable style={{ flex: 1 }} onPress={() => setIdConfirmandoBorrado(null)}>
+      <Pressable
+        style={{ flex: 1 }}
+        onPress={() => {
+          setIdConfirmandoBorrado(null);
+          setIdConfirmandoDefinitivo(null);
+        }}
+      >
         
         <View style={styles.cajaHeader}>
           {!editandoNombre ? (
@@ -163,108 +230,168 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <View style={styles.cajaFormulario}>
-          <View style={styles.filaTituloConBoton}>
-            <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
-          </View>
-
-          <TextInput
-            style={[styles.inputForm, { marginTop: 8 }]}
-            placeholder="Nombre del producto"
-            placeholderTextColor="#999"
-            value={nuevoNombre}
-            onChangeText={setNuevoNombre}
-          />
-          <View style={styles.filaForm}>
-            <TextInput
-              style={[styles.inputForm, { flex: 1, marginRight: 8, marginBottom: 0 }]}
-              placeholder="Precio"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              value={nuevoPrecio}
-              onChangeText={setNuevoPrecio}
-            />
-            <TouchableOpacity style={styles.botonGuardar} onPress={handleAgregarProducto}>
-              <Text style={styles.textoBoton}>+ Guardar</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categoría:</Text>
-          <TextInput
-            style={[styles.inputForm, { marginTop: 4 }]}
-            placeholder="Ej. Abarrotes, Bebidas"
-            placeholderTextColor="#999"
-            value={nuevaCategoria}
-            onChangeText={setNuevaCategoria}
-          />
+        <View style={styles.filaSwitchVista}>
+          <TouchableOpacity
+            style={[styles.botonVista, !verPapelera && styles.botonVistaActiva]}
+            onPress={() => setVerPapelera(false)}
+          >
+            <Text style={[styles.textoVista, !verPapelera && styles.textoVistaActiva]}>
+              📦 Inventario ({productos.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.botonVista, verPapelera && styles.botonVistaPapeleraActiva]}
+            onPress={() => setVerPapelera(true)}
+          >
+            <Text style={[styles.textoVista, verPapelera && styles.textoVistaActiva]}>
+              🗑️ Papelera ({papelera.length})
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.seccionFiltros}>
-          <TextInput
-            style={styles.barraBusqueda}
-            placeholder="🔍 Buscar producto..."
-            placeholderTextColor="#777"
-            value={busqueda}
-            onChangeText={setBusqueda}
-          />
-          
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carruselCategorias}>
-            {categoriasDinamicas.map(cat => (
-              <TouchableOpacity 
-                key={cat} 
-                style={[styles.pestañaCat, categoriaSeleccionada === cat && styles.pestañaCatActiva]}
-                onPress={() => setCategoriaSeleccionada(cat)}
-              >
-                <Text style={[styles.textoPestaña, categoriaSeleccionada === cat && styles.textoPestañaActiva]}>{cat}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <View style={styles.filaOrdenamiento}>
-            <Text style={styles.labelOrden}>Orden:</Text>
-            <TouchableOpacity style={[styles.botonOrden, ordenarPor === 'nombre' && styles.botonOrdenActivo]} onPress={() => setOrdenarPor('nombre')}>
-              <Text style={[styles.textoOrden, ordenarPor === 'nombre' && styles.textoOrdenActivo]}>🔤 A-Z</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.botonOrden, ordenarPor === 'recientes' && styles.botonOrdenActivo]} onPress={() => setOrdenarPor('recientes')}>
-              <Text style={[styles.textoOrden, ordenarPor === 'recientes' && styles.textoOrdenActivo]}>⏱️ Recientes</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <Text style={styles.subtituloSeccion}>Productos en vista ({productosFiltrados.length})</Text>
-        {cargando ? (
-          <Text style={styles.textoVacio}>Sincronizando con la nube...</Text>
-        ) : (
-          productosFiltrados.map((item) => {
-            const esReciente = (Date.now() - item.actualizadoEn) < 12000;
-            const esBorrando = idConfirmandoBorrado === item.id;
-            return (
-              <View key={item.id} style={[styles.tarjetaProducto, esReciente && styles.tarjetaResaltada]}>
-                <View style={styles.infoProducto}>
-                  <View style={styles.filaNombre}>
-                    <Text style={styles.nombreProducto} numberOfLines={1}>{item.nombre}</Text>
-                    {esReciente && <Text style={styles.badgeModificado}>¡Ok!</Text>}
-                  </View>
-                  <Text style={styles.tagCategoria}>{item.categoria}</Text>
-                  <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
-                </View>
-                <View style={styles.accionesProducto}>
-                  <TextInput
-                    style={styles.inputCorto}
-                    keyboardType="numeric"
-                    placeholder="Editar"
-                    placeholderTextColor="#999"
-                    onChangeText={(txt) => cambiarPrecio(item.id, txt)}
-                  />
-                  <TouchableOpacity style={[styles.botonEliminar, esBorrando && styles.botonEliminarAlerta]} onPress={() => intentarEliminar(item.id)}>
-                    <Text style={[styles.textoEliminar, esBorrando && styles.textoEliminarAlerta]}>{esBorrando ? '¿Borrar?' : '🗑️'}</Text>
-                  </TouchableOpacity>
-                </View>
+        {!verPapelera ? (
+          <>
+            <View style={styles.cajaFormulario}>
+              <View style={styles.filaTituloConBoton}>
+                <Text style={styles.tituloFormulario}>Nuevo Producto</Text>
               </View>
-            );
-          })
+
+              <TextInput
+                style={[styles.inputForm, { marginTop: 8 }]}
+                placeholder="Nombre del producto"
+                placeholderTextColor="#999"
+                value={nuevoNombre}
+                onChangeText={setNuevoNombre}
+              />
+              <View style={styles.filaForm}>
+                <TextInput
+                  style={[styles.inputForm, { flex: 1, marginRight: 8, marginBottom: 0 }]}
+                  placeholder="Precio"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  value={nuevoPrecio}
+                  onChangeText={setNuevoPrecio}
+                />
+                <TouchableOpacity style={styles.botonGuardar} onPress={handleAgregarProducto}>
+                  <Text style={styles.textoBoton}>+ Guardar</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.labelPanelCat, { marginTop: 10 }]}>Categoría:</Text>
+              <TextInput
+                style={[styles.inputForm, { marginTop: 4 }]}
+                placeholder="Ej. Abarrotes, Bebidas"
+                placeholderTextColor="#999"
+                value={nuevaCategoria}
+                onChangeText={setNuevaCategoria}
+              />
+            </View>
+
+            <View style={styles.seccionFiltros}>
+              <TextInput
+                style={styles.barraBusqueda}
+                placeholder="🔍 Buscar producto..."
+                placeholderTextColor="#777"
+                value={busqueda}
+                onChangeText={setBusqueda}
+              />
+              
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carruselCategorias}>
+                {categoriasDinamicas.map(cat => (
+                  <TouchableOpacity 
+                    key={cat} 
+                    style={[styles.pestañaCat, categoriaSeleccionada === cat && styles.pestañaCatActiva]}
+                    onPress={() => setCategoriaSeleccionada(cat)}
+                  >
+                    <Text style={[styles.textoPestaña, categoriaSeleccionada === cat && styles.textoPestañaActiva]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.filaOrdenamiento}>
+                <Text style={styles.labelOrden}>Orden:</Text>
+                <TouchableOpacity style={[styles.botonOrden, ordenarPor === 'nombre' && styles.botonOrdenActivo]} onPress={() => setOrdenarPor('nombre')}>
+                  <Text style={[styles.textoOrden, ordenarPor === 'nombre' && styles.textoOrdenActivo]}>🔤 A-Z</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.botonOrden, ordenarPor === 'recientes' && styles.botonOrdenActivo]} onPress={() => setOrdenarPor('recientes')}>
+                  <Text style={[styles.textoOrden, ordenarPor === 'recientes' && styles.textoOrdenActivo]}>⏱️ Recientes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Text style={styles.subtituloSeccion}>Productos en vista ({productosFiltrados.length})</Text>
+            {cargando ? (
+              <Text style={styles.textoVacio}>Sincronizando con la nube...</Text>
+            ) : (
+              productosFiltrados.map((item) => {
+                const esReciente = (Date.now() - item.actualizadoEn) < 12000;
+                const esBorrando = idConfirmandoBorrado === item.id;
+                return (
+                  <View key={item.id} style={[styles.tarjetaProducto, esReciente && styles.tarjetaResaltada]}>
+                    <View style={styles.infoProducto}>
+                      <View style={styles.filaNombre}>
+                        <Text style={styles.nombreProducto}>{item.nombre}</Text>
+                        {esReciente && <Text style={styles.badgeModificado}>¡Ok!</Text>}
+                      </View>
+                      <Text style={styles.tagCategoria}>{item.categoria}</Text>
+                      <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.accionesProducto}>
+                      <TextInput
+                        style={styles.inputCorto}
+                        keyboardType="numeric"
+                        placeholder="Editar"
+                        placeholderTextColor="#999"
+                        onChangeText={(txt) => cambiarPrecio(item.id, txt)}
+                      />
+                      <TouchableOpacity style={[styles.botonEliminar, esBorrando && styles.botonEliminarAlerta]} onPress={() => intentarEliminar(item)}>
+                        <Text style={[styles.textoEliminar, esBorrando && styles.textoEliminarAlerta]}>{esBorrando ? '¿Borrar?' : '🗑️'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+            {!cargando && productosFiltrados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
+          </>
+        ) : (
+          <View>
+            <Text style={styles.subtituloSeccion}>
+              Papelera temporal ({papelera.length}) — Puedes restaurar si borraste por error
+            </Text>
+            {papelera.map((item) => {
+              const esDefinitivo = idConfirmandoDefinitivo === item.id;
+              return (
+                <View key={item.id} style={styles.tarjetaProducto}>
+                  <View style={styles.infoProducto}>
+                    <View style={styles.filaNombre}>
+                      <Text style={styles.nombreProducto}>{item.nombre}</Text>
+                    </View>
+                    <Text style={styles.tagCategoria}>{item.categoria}</Text>
+                    <Text style={styles.textoPrecio}>S/. {item.precio.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.accionesProducto}>
+                    <TouchableOpacity style={styles.botonRestaurar} onPress={() => restaurarProducto(item)}>
+                      <Text style={styles.textoRestaurar}>♻️ Restaurar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.botonEliminar, esDefinitivo && styles.botonEliminarAlerta]}
+                      onPress={() => eliminarDefinitivamente(item.id)}
+                    >
+                      <Text style={[styles.textoEliminar, esDefinitivo && styles.textoEliminarAlerta]}>
+                        {esDefinitivo ? '¿Fijo?' : '❌'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+            {papelera.length === 0 && (
+              <Text style={styles.textoVacio}>La papelera está vacía.</Text>
+            )}
+          </View>
         )}
-        {!cargando && productosFiltrados.length === 0 && <Text style={styles.textoVacio}>No hay productos.</Text>}
+
         <View style={{ height: 40 }} />
       </Pressable>
     </ScrollView>
@@ -273,7 +400,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   contenedor: { paddingHorizontal: 15, backgroundColor: '#F5F7FA' },
-  cajaHeader: { marginVertical: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
+  cajaHeader: { marginTop: 15, marginBottom: 10, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
   tituloHeader: { fontSize: 20, fontWeight: 'bold', color: '#1A1C1E', textAlign: 'center' },
   cajaEditarNombre: { width: '100%', gap: 8 },
   inputNombreHeader: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#F8FAFC', color: '#333', fontSize: 15 },
@@ -282,6 +409,12 @@ const styles = StyleSheet.create({
   textoAccionNombre: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
   botonCancelarNombre: { backgroundColor: '#F1F5F9', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' },
   textoAccionCancelar: { color: '#475569', fontSize: 13, fontWeight: '600' },
+  filaSwitchVista: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  botonVista: { flex: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' },
+  botonVistaActiva: { backgroundColor: '#0284C7', borderColor: '#0284C7' },
+  botonVistaPapeleraActiva: { backgroundColor: '#B45309', borderColor: '#B45309' },
+  textoVista: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  textoVistaActiva: { color: '#FFFFFF' },
   subtituloSeccion: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 10, marginTop: 5 },
   cajaFormulario: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0' },
   filaTituloConBoton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
@@ -308,12 +441,14 @@ const styles = StyleSheet.create({
   tarjetaResaltada: { borderColor: '#34D399', backgroundColor: '#F0FDF4', borderWidth: 1.5 },
   infoProducto: { flex: 1, paddingRight: 8 },
   filaNombre: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  nombreProducto: { fontSize: 15, fontWeight: '600', color: '#1A1C1E', maxWidth: '80%' },
+  nombreProducto: { fontSize: 15, fontWeight: '600', color: '#1A1C1E', flexShrink: 1 },
   badgeModificado: { fontSize: 10, color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, overflow: 'hidden', fontWeight: '700' },
   tagCategoria: { fontSize: 11, color: '#64748B', marginTop: 2 },
   textoPrecio: { fontSize: 15, fontWeight: 'bold', color: '#059669', marginTop: 3 },
   accionesProducto: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   inputCorto: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, backgroundColor: '#F8FAFC', width: 60, fontSize: 12, color: '#333', textAlign: 'center' },
+  botonRestaurar: { paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#ECFDF5', borderRadius: 8, borderWidth: 1, borderColor: '#A7F3D0' },
+  textoRestaurar: { fontSize: 12, fontWeight: '700', color: '#047857' },
   botonEliminar: { paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FEE2E2', minWidth: 35, alignItems: 'center' },
   botonEliminarAlerta: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
   textoEliminar: { fontSize: 14 },
