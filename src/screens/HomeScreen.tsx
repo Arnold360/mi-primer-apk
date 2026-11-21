@@ -44,6 +44,7 @@ export default function HomeScreen() {
   const [nombreBodega, setNombreBodega] = useState('Mi Bodega Pro');
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [inputNombreTemp, setInputNombreTemp] = useState('');
+  const [mostrarSecciones, setMostrarSecciones] = useState(false);
 
   useEffect(() => {
     const unsubscribeProductos = onSnapshot(collection(db, 'productos'), (snapshot) => {
@@ -229,7 +230,20 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+        <View style={styles.filaToggleSecciones}>
+          <TouchableOpacity onPress={() => {
+            const siguienteEstado = !mostrarSecciones;
+            setMostrarSecciones(siguienteEstado);
+            if (!siguienteEstado) {
+            setVerPapelera(false);}}}
+              >
+           <Text style={styles.textoToggleSecciones}>
+            {mostrarSecciones ? 'Ocultar secciones' : `Secciones (${papelera.length} en papelera)`}
+           </Text>
+          </TouchableOpacity>
+        </View>
 
+      {mostrarSecciones && (
         <View style={styles.filaSwitchVista}>
           <TouchableOpacity
             style={[styles.botonVista, !verPapelera && styles.botonVistaActiva]}
@@ -247,7 +261,7 @@ export default function HomeScreen() {
               🗑️ Papelera ({papelera.length})
             </Text>
           </TouchableOpacity>
-        </View>
+        </View>)}
 
         {!verPapelera ? (
           <>
@@ -453,5 +467,7 @@ const styles = StyleSheet.create({
   botonEliminarAlerta: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
   textoEliminar: { fontSize: 14 },
   textoEliminarAlerta: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  textoVacio: { textAlign: 'center', color: '#64748B', marginTop: 15, fontSize: 14 }
-});
+  textoVacio: { textAlign: 'center', color: '#64748B', marginTop: 15, fontSize: 14 },
+  filaToggleSecciones: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 },
+  textoToggleSecciones: { fontSize: 12, color: '#94A3B8', fontWeight: '500' }
+ });
